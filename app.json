@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "Eatless",
+    "slug": "eatless",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#0D0E12"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.eatless.calorie",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Eatless yemeklerinizi fotoğraflayarak yapay zeka ile kalori ve makro analizi yapmak için kamerayı kullanır.",
+        "NSPhotoLibraryUsageDescription": "Eatless yemek fotoğraflarınızı seçip analiz etmek için fotoğraf galerinize erişim ister."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0D0E12"
+      },
+      "package": "com.eatless.calorie"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
