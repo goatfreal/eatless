@@ -12,10 +12,75 @@ export interface AiAnalysisResult {
 
 const NVIDIA_API_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
 
+export const ACTIVE_TEXT_MODELS = [
+  'google/gemma-3-12b-it',
+  'deepseek-ai/deepseek-v4.1-flash',
+  'nvidia/nemotron-3.5-lightning-30b-a3b',
+  'mistralai/mistral-large-4-1t-a52b',
+  'google/gemma-4-31b-it',
+  'nv-mistralai/mistral-nemo-12b-instruct',
+];
+
+export const ACTIVE_VISION_MODELS = [
+  'nvidia/nemotron-3.5-super-vl-120b-a12b',
+  'google/gemma-3-12b-it',
+  'meta/llama-3.2-90b-vision-instruct',
+];
+
+async function callNvidiaWithFallback(
+  apiKey: string,
+  candidates: string[],
+  messages: any[],
+  maxTokens = 400
+): Promise<{ content: string; usedModel: string }> {
+  const cleanKey = apiKey.trim();
+  let lastError = '';
+
+  for (const model of candidates) {
+    try {
+      const response = await fetch(NVIDIA_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${cleanKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          temperature: 0.15,
+          max_tokens: maxTokens,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content || '';
+        if (content) {
+          return { content, usedModel: model };
+        }
+      } else {
+        const errText = await response.text();
+        lastError = `(${response.status}) ${errText.slice(0, 140)}`;
+        // If 401 Unauthorized, key itself is wrong, stop immediately
+        if (response.status === 401 || response.status === 403) {
+          throw new Error(`NVIDIA API Anahtarı Geçersiz (${response.status}). Lütfen anahtarınızı kontrol edin.`);
+        }
+      }
+    } catch (err: any) {
+      if (err?.message?.includes('Anahtarı Geçersiz')) {
+        throw err;
+      }
+      lastError = err?.message || 'Bilinmeyen hata';
+    }
+  }
+
+  throw new Error(`NVIDIA Sunucu Hatası: ${lastError}`);
+}
+
 export async function testNvidiaApiKey(
   apiKey: string,
-  model = 'meta/llama-3.1-70b-instruct'
-): Promise<{ ok: boolean; message: string }> {
+  preferredModel?: string
+): Promise<{ ok: boolean; message: string; activeModel?: string }> {
   const cleanKey = apiKey.trim();
   if (!cleanKey || !cleanKey.startsWith('nvapi-')) {
     return {
@@ -24,39 +89,26 @@ export async function testNvidiaApiKey(
     };
   }
 
+  const candidates = preferredModel
+    ? [preferredModel, ...ACTIVE_TEXT_MODELS.filter((m) => m !== preferredModel)]
+    : ACTIVE_TEXT_MODELS;
+
   try {
-    const response = await fetch(NVIDIA_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${cleanKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: 'user', content: 'Sadece "OK" yaz.' }],
-        max_tokens: 10,
-        temperature: 0.1,
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      return {
-        ok: false,
-        message: `NVIDIA Sunucu Hatası (${response.status}): ${errText.slice(0, 120)}`,
-      };
-    }
-
-    const data = await response.json();
-    const reply = data.choices?.[0]?.message?.content || '';
+    const { content, usedModel } = await callNvidiaWithFallback(
+      cleanKey,
+      candidates,
+      [{ role: 'user', content: 'Sadece "OK" yaz.' }],
+      15
+    );
     return {
       ok: true,
-      message: `Bağlantı Başarılı! NVIDIA NIM (${model}) aktif. Yanıt: ${reply.trim()}`,
+      activeModel: usedModel,
+      message: `Bağlantı Başarılı! Aktif Model: ${usedModel} (Yanıt: ${content.trim()})`,
     };
   } catch (error: any) {
     return {
       ok: false,
-      message: `Ağ hatası: ${error?.message || 'Sunucuya ulaşılamadı'}`,
+      message: error?.message || 'Sunucuya ulaşılamadı',
     };
   }
 }
@@ -64,7 +116,7 @@ export async function testNvidiaApiKey(
 export async function analyzeMealWithNvidiaText(
   description: string,
   apiKey: string,
-  model = 'meta/llama-3.1-70b-instruct'
+  preferredModel?: string
 ): Promise<AiAnalysisResult> {
   const cleanKey = apiKey.trim();
   if (!cleanKey || !cleanKey.startsWith('nvapi-')) {
@@ -87,33 +139,23 @@ Lütfen bu yemeğin gerçek besin değerlerini hesapla ve SADECE geçerli bir JS
   "aiTip": "Bu besinle ilgili 1 cümlelik bilimsel diyetisyen yorumu"
 }`;
 
-  const response = await fetch(NVIDIA_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${cleanKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        {
-          role: 'system',
-          content: 'Sadece saf JSON döndüren bir beslenme analiz motorusun. Asla rastgele veri üretme, gerçek USDA/Türkomp besin değerlerini baz al.',
-        },
-        { role: 'user', content: prompt },
-      ],
-      temperature: 0.15,
-      max_tokens: 400,
-    }),
-  });
+  const candidates = preferredModel
+    ? [preferredModel, ...ACTIVE_TEXT_MODELS.filter((m) => m !== preferredModel)]
+    : ACTIVE_TEXT_MODELS;
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`NVIDIA API Hatası (${response.status}): ${errText.slice(0, 150)}`);
-  }
+  const { content } = await callNvidiaWithFallback(
+    cleanKey,
+    candidates,
+    [
+      {
+        role: 'system',
+        content: 'Sadece saf JSON döndüren bir beslenme analiz motorusun. Gerçek USDA/Türkomp besin değerlerini baz al.',
+      },
+      { role: 'user', content: prompt },
+    ],
+    400
+  );
 
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content || '';
   const jsonMatch = content.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
     throw new Error('NVIDIA AI yanıtı JSON formatında ayrıştırılamadı.');
@@ -134,7 +176,7 @@ Lütfen bu yemeğin gerçek besin değerlerini hesapla ve SADECE geçerli bir JS
 export async function analyzeMealWithNvidiaVision(
   base64Image: string,
   apiKey: string,
-  visionModel = 'meta/llama-3.2-11b-vision-instruct'
+  preferredVisionModel?: string
 ): Promise<AiAnalysisResult> {
   const cleanKey = apiKey.trim();
   if (!cleanKey || !cleanKey.startsWith('nvapi-')) {
@@ -159,35 +201,25 @@ Gerçekçi kalori ve makro değerlerini hesapla ve SADECE şu JSON yapısında y
   "aiTip": "Fotoğraftaki tabak hakkında 1 cümlelik beslenme tavsiyesi"
 }`;
 
-  const response = await fetch(NVIDIA_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${cleanKey}`,
-    },
-    body: JSON.stringify({
-      model: visionModel,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: prompt },
-            { type: 'image_url', image_url: { url: formattedDataUrl } },
-          ],
-        },
-      ],
-      max_tokens: 450,
-      temperature: 0.15,
-    }),
-  });
+  const candidates = preferredVisionModel
+    ? [preferredVisionModel, ...ACTIVE_VISION_MODELS.filter((m) => m !== preferredVisionModel)]
+    : ACTIVE_VISION_MODELS;
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`NVIDIA Vision Hatası (${response.status}): ${errText.slice(0, 150)}`);
-  }
+  const { content } = await callNvidiaWithFallback(
+    cleanKey,
+    candidates,
+    [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: prompt },
+          { type: 'image_url', image_url: { url: formattedDataUrl } },
+        ],
+      },
+    ],
+    450
+  );
 
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content || '';
   const jsonMatch = content.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
     throw new Error('NVIDIA Vision yanıtı ayrıştırılamadı: ' + content.slice(0, 100));
@@ -240,28 +272,15 @@ Karşındaki kullanıcının gerçek profili:
 
 Kullanıcıya ismiyle (${profile.name}) hitap et. Cevabın doğrudan onun gerçek verilerine dayansın, net, motive edici ve bilimsel olsun.`;
 
-  const response = await fetch(NVIDIA_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${cleanKey}`,
-    },
-    body: JSON.stringify({
-      model: profile.nvidiaTextModel || 'meta/llama-3.1-70b-instruct',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: question },
-      ],
-      max_tokens: 400,
-      temperature: 0.35,
-    }),
-  });
+  const { content } = await callNvidiaWithFallback(
+    cleanKey,
+    ACTIVE_TEXT_MODELS,
+    [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: question },
+    ],
+    400
+  );
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`NVIDIA API Hatası (${response.status}): ${errText.slice(0, 120)}`);
-  }
-
-  const data = await response.json();
-  return data.choices?.[0]?.message?.content?.trim() || 'Yanıt alınamadı.';
+  return content.trim() || 'Yanıt alınamadı.';
 }

@@ -17,8 +17,8 @@ export const INITIAL_PROFILE: UserProfile = {
   activityLevel: 'moderate',
   goalType: 'lose',
   nvidiaApiKey: '',
-  nvidiaTextModel: 'meta/llama-3.1-70b-instruct',
-  nvidiaVisionModel: 'meta/llama-3.2-11b-vision-instruct',
+  nvidiaTextModel: 'google/gemma-3-12b-it',
+  nvidiaVisionModel: 'nvidia/nemotron-3.5-super-vl-120b-a12b',
   targets: calculatePersonalTargets('male', 24, 178, 75, 'moderate', 'lose'),
 };
 

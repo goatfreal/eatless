@@ -79,8 +79,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
       activityLevel,
       goalType,
       nvidiaApiKey: nvidiaApiKey.trim(),
-      nvidiaTextModel: 'meta/llama-3.1-70b-instruct',
-      nvidiaVisionModel: 'meta/llama-3.2-11b-vision-instruct',
+      nvidiaTextModel: 'google/gemma-3-12b-it',
+      nvidiaVisionModel: 'nvidia/nemotron-3.5-super-vl-120b-a12b',
       targets: calculatedTargets,
     };
     onComplete(finalProfile);
