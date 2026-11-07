@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -14,8 +14,7 @@ import {
   View,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../theme/colors';
+import { COLORS, FONTS } from '../theme/colors';
 import { FoodItem, MealType } from '../types/nutrition';
 import {
   AiAnalysisResult,
@@ -35,10 +34,10 @@ interface AiFoodScannerModalProps {
 }
 
 const PORTION_MULTIPLIERS = [
-  { label: '0.5x Yarım', value: 0.5 },
+  { label: '0.5x', value: 0.5 },
   { label: '1x Standart', value: 1 },
-  { label: '1.5x Büyük', value: 1.5 },
-  { label: '2x Çift', value: 2 },
+  { label: '1.5x', value: 1.5 },
+  { label: '2x', value: 2 },
 ];
 
 export const AiFoodScannerModal: React.FC<AiFoodScannerModalProps> = ({
@@ -59,16 +58,17 @@ export const AiFoodScannerModal: React.FC<AiFoodScannerModalProps> = ({
   const [baseResult, setBaseResult] = useState<AiAnalysisResult | null>(null);
   const [multiplier, setMultiplier] = useState<number>(1);
 
-  const hasValidKey = !!nvidiaApiKey && nvidiaApiKey.trim().startsWith('nvapi-');
+  useEffect(() => {
+    setSelectedMeal(targetMealType);
+  }, [targetMealType]);
 
   const handleTakePhoto = async () => {
-    if (!hasValidKey) {
-      setErrorMsg('Fotoğraf analizi için önce NVIDIA API anahtarınızı bağlamalısınız.');
-      return;
-    }
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('İzin Gerekli', 'Yemek fotoğrafı çekmek için kamera izni gerekiyor.');
+      Alert.alert(
+        'Kamera İzni Gerekli',
+        'Yemek fotoğrafı çekmek için kamera erişimine izin vermelisiniz.'
+      );
       return;
     }
 
@@ -86,13 +86,12 @@ export const AiFoodScannerModal: React.FC<AiFoodScannerModalProps> = ({
   };
 
   const handlePickPhoto = async () => {
-    if (!hasValidKey) {
-      setErrorMsg('Fotoğraf analizi için önce NVIDIA API anahtarınızı bağlamalısınız.');
-      return;
-    }
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('İzin Gerekli', 'Galeriden fotoğraf seçmek için izin gerekiyor.');
+      Alert.alert(
+        'Galeri İzni Gerekli',
+        'Fotoğraf seçmek için galeri erişimine izin vermelisiniz.'
+      );
       return;
     }
 
@@ -115,7 +114,11 @@ export const AiFoodScannerModal: React.FC<AiFoodScannerModalProps> = ({
     setBaseResult(null);
     setMultiplier(1);
     try {
-      const res = await analyzeMealWithNvidiaVision(base64, nvidiaApiKey, nvidiaVisionModel);
+      const res = await analyzeMealWithNvidiaVision(
+        base64,
+        nvidiaApiKey,
+        nvidiaVisionModel
+      );
       setBaseResult(res);
     } catch (err: any) {
       setErrorMsg(err?.message || 'Görsel analiz sırasında hata oluştu.');
@@ -131,7 +134,11 @@ export const AiFoodScannerModal: React.FC<AiFoodScannerModalProps> = ({
     setBaseResult(null);
     setMultiplier(1);
     try {
-      const res = await analyzeMealWithNvidiaText(description, nvidiaApiKey, nvidiaTextModel);
+      const res = await analyzeMealWithNvidiaText(
+        description,
+        nvidiaApiKey,
+        nvidiaTextModel
+      );
       setBaseResult(res);
     } catch (err: any) {
       setErrorMsg(err?.message || 'Metin analizi sırasında hata oluştu.');
@@ -152,7 +159,7 @@ export const AiFoodScannerModal: React.FC<AiFoodScannerModalProps> = ({
       protein: Math.round(baseResult.protein * multiplier),
       carbs: Math.round(baseResult.carbs * multiplier),
       fat: Math.round(baseResult.fat * multiplier),
-      portion: `${multiplier}x (${baseResult.portion})`,
+      portion: `${multiplier}x · ${baseResult.portion}`,
       mealType: selectedMeal,
       imageUrl: imageUri || undefined,
       aiTip: baseResult.aiTip,
@@ -171,206 +178,210 @@ export const AiFoodScannerModal: React.FC<AiFoodScannerModalProps> = ({
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardContainer}
       >
-        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
-          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
-            {/* Header */}
+        <View style={styles.overlay}>
+          <View style={styles.sheet}>
+            {/* Editorial Sheet Header */}
             <View style={styles.header}>
               <View>
-                <Text style={styles.title}>NVIDIA AI Besin Tarayıcı</Text>
+                <Text style={styles.title}>Besin ve Fotoğraf Tarayıcı</Text>
                 <Text style={styles.subtitle}>
-                  Gerçek zamanlı Llama Vision & Besin Hesaplama
+                  Nemotron Vision & Klinik Besin Veritabanı
                 </Text>
               </View>
-              <TouchableOpacity onPress={onClose}>
-                <Ionicons name="close-circle" size={26} color={COLORS.textMuted} />
+              <TouchableOpacity
+                onPress={onClose}
+                activeOpacity={0.75}
+                style={styles.closeBtn}
+              >
+                <Text style={styles.closeBtnText}>Kapat</Text>
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Missing Key Warning */}
-              {!hasValidKey && (
-                <TouchableOpacity style={styles.missingKeyBox} onPress={() => { onClose(); onOpenSettings(); }}>
-                  <Ionicons name="key-outline" size={20} color="#FCA5A5" />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.missingKeyTitle}>NVIDIA API Anahtarı Girilmemiş!</Text>
-                    <Text style={styles.missingKeySub}>
-                      Yapay zeka analizini kullanmak için buraya dokunup nvapi-... anahtarınızı girin.
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color="#FCA5A5" />
-                </TouchableOpacity>
-              )}
-
-              {/* Meal Type Selector */}
-              <View style={styles.mealTypeRow}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.scrollBody}
+            >
+              {/* Segmented Meal Selector */}
+              <Text style={styles.fieldLabel}>Öğün Grubu</Text>
+              <View style={styles.segmentBar}>
                 {[
                   { id: 'breakfast', label: 'Kahvaltı' },
                   { id: 'lunch', label: 'Öğle' },
                   { id: 'dinner', label: 'Akşam' },
                   { id: 'snack', label: 'Ara Öğün' },
-                ].map((m) => (
-                  <TouchableOpacity
-                    key={m.id}
-                    style={[
-                      styles.mealTypeChip,
-                      selectedMeal === m.id && styles.mealTypeChipActive,
-                    ]}
-                    onPress={() => setSelectedMeal(m.id as MealType)}
-                  >
-                    <Text
+                ].map((m) => {
+                  const active = selectedMeal === m.id;
+                  return (
+                    <TouchableOpacity
+                      key={m.id}
+                      activeOpacity={0.75}
+                      onPress={() => setSelectedMeal(m.id as MealType)}
                       style={[
-                        styles.mealTypeText,
-                        selectedMeal === m.id && styles.mealTypeTextActive,
+                        styles.segmentBtn,
+                        active && styles.segmentBtnActive,
                       ]}
                     >
-                      {m.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                      <Text
+                        style={[
+                          styles.segmentText,
+                          active && styles.segmentTextActive,
+                        ]}
+                      >
+                        {m.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
 
-              {/* Camera & Gallery Buttons */}
+              {/* Camera & Gallery Actions */}
+              <Text style={styles.fieldLabel}>Görsel Tarama</Text>
               <View style={styles.photoActionsRow}>
                 <TouchableOpacity
-                  style={[styles.photoActionBtn, styles.photoActionPrimary]}
+                  style={styles.photoBtnPrimary}
                   onPress={handleTakePhoto}
+                  activeOpacity={0.8}
                 >
-                  <Ionicons name="camera" size={20} color="#FFFFFF" />
-                  <Text style={styles.photoBtnText}>Fotoğraf Çek</Text>
+                  <Text style={styles.photoBtnPrimaryText}>Fotoğraf Çek</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={styles.photoActionBtn}
+                  style={styles.photoBtnSecondary}
                   onPress={handlePickPhoto}
+                  activeOpacity={0.8}
                 >
-                  <Ionicons name="images-outline" size={20} color={COLORS.text} />
-                  <Text style={styles.photoBtnTextSecondary}>Galeriden Seç</Text>
+                  <Text style={styles.photoBtnSecondaryText}>Galeriden Seç</Text>
                 </TouchableOpacity>
               </View>
 
               {imageUri && (
-                <View style={styles.previewContainer}>
+                <View style={styles.previewBox}>
                   <Image source={{ uri: imageUri }} style={styles.previewImage} />
                 </View>
               )}
 
-              {/* Text Input */}
-              <Text style={styles.inputLabel}>Yediğin Yemeği ve Miktarını Yaz:</Text>
-              <View style={styles.textInputBox}>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="Örn: 200 gram ızgara tavuk göğsü, 1 porsiyon pirinç pilavı ve 1 kase cacık"
-                  placeholderTextColor={COLORS.textMuted}
-                  value={description}
-                  onChangeText={setDescription}
-                  multiline
-                />
-                <TouchableOpacity
-                  style={[styles.analyzeBtn, !description.trim() && styles.analyzeBtnDisabled]}
-                  onPress={runTextAnalysis}
-                  disabled={!description.trim() || isAnalyzing}
-                >
-                  <Ionicons name="sparkles" size={16} color="#FFFFFF" />
-                  <Text style={styles.analyzeBtnText}>NVIDIA AI ile Hesapla</Text>
-                </TouchableOpacity>
+              {/* Text Description Input */}
+              <Text style={styles.fieldLabel}>Metin İle Besin Analizi</Text>
+              <View style={styles.surfaceGroup}>
+                <View style={styles.inputPadding}>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="Örn: 200g ızgara tavuk göğsü, 1 porsiyon bulgur pilavı ve salata"
+                    placeholderTextColor={COLORS.inkMuted}
+                    value={description}
+                    onChangeText={setDescription}
+                    multiline
+                  />
+                </View>
+                <View style={styles.inputActionRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.calcBtn,
+                      (!description.trim() || isAnalyzing) && styles.calcBtnDisabled,
+                    ]}
+                    onPress={runTextAnalysis}
+                    disabled={!description.trim() || isAnalyzing}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.calcBtnText}>Besin Değerlerini Hesapla</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
-              {/* Error Message Display */}
               {errorMsg && (
                 <View style={styles.errorBox}>
-                  <Ionicons name="alert-circle" size={18} color="#EF4444" />
                   <Text style={styles.errorText}>{errorMsg}</Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      onClose();
+                      onOpenSettings();
+                    }}
+                    style={styles.errorLinkBtn}
+                  >
+                    <Text style={styles.errorLinkText}>API Ayarlarını Aç</Text>
+                  </TouchableOpacity>
                 </View>
               )}
 
-              {/* Loading */}
               {isAnalyzing && (
                 <View style={styles.loadingBox}>
-                  <ActivityIndicator size="large" color={COLORS.nvidia} />
+                  <ActivityIndicator size="small" color={COLORS.ink} />
                   <Text style={styles.loadingText}>
-                    NVIDIA NIM sunucusundan besin değerleri hesaplanıyor...
+                    Besin kompozisyonu hesaplanıyor...
                   </Text>
                 </View>
               )}
 
-              {/* Real Result Card */}
+              {/* Single-Elevation Result Container (No nested cards) */}
               {baseResult && !isAnalyzing && (
-                <View style={styles.resultCard}>
-                  <View style={styles.resultHeader}>
-                    <View style={{ flex: 1, marginRight: 10 }}>
+                <View style={styles.resultContainer}>
+                  <View style={styles.resultTop}>
+                    <View style={{ flex: 1, marginRight: 12 }}>
                       <Text style={styles.resultName}>{baseResult.name}</Text>
-                      <Text style={styles.resultPortion}>{baseResult.portion}</Text>
+                      <Text style={styles.resultInlineMeta}>
+                        {baseResult.portion} ·{' '}
+                        {Math.round(baseResult.protein * multiplier)}g P /{' '}
+                        {Math.round(baseResult.carbs * multiplier)}g K /{' '}
+                        {Math.round(baseResult.fat * multiplier)}g Y
+                      </Text>
                     </View>
-                    <View style={styles.calBadge}>
-                      <Text style={styles.calBadgeNumber}>
+                    <View style={styles.resultCalCol}>
+                      <Text style={styles.resultCalNumber}>
                         {Math.round(baseResult.calories * multiplier)}
                       </Text>
-                      <Text style={styles.calBadgeUnit}>kcal</Text>
+                      <Text style={styles.resultCalUnit}>kcal</Text>
                     </View>
                   </View>
 
-                  {/* Portion Multiplier Selector */}
-                  <Text style={styles.portionLabel}>Porsiyon Çarpanı:</Text>
-                  <View style={styles.multiplierRow}>
-                    {PORTION_MULTIPLIERS.map((p) => (
-                      <TouchableOpacity
-                        key={p.value}
-                        style={[
-                          styles.multBtn,
-                          multiplier === p.value && styles.multBtnActive,
-                        ]}
-                        onPress={() => setMultiplier(p.value)}
-                      >
-                        <Text
-                          style={[
-                            styles.multText,
-                            multiplier === p.value && styles.multTextActive,
-                          ]}
-                        >
-                          {p.label}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                  {/* Macros */}
-                  <View style={styles.macrosRow}>
-                    <View style={[styles.macroItem, { borderColor: COLORS.protein + '40' }]}>
-                      <Text style={[styles.macroItemTitle, { color: COLORS.protein }]}>Protein</Text>
-                      <Text style={styles.macroItemVal}>
-                        {Math.round(baseResult.protein * multiplier)}g
-                      </Text>
-                    </View>
-                    <View style={[styles.macroItem, { borderColor: COLORS.carbs + '40' }]}>
-                      <Text style={[styles.macroItemTitle, { color: COLORS.carbs }]}>Karb</Text>
-                      <Text style={styles.macroItemVal}>
-                        {Math.round(baseResult.carbs * multiplier)}g
-                      </Text>
-                    </View>
-                    <View style={[styles.macroItem, { borderColor: COLORS.fat + '40' }]}>
-                      <Text style={[styles.macroItemTitle, { color: COLORS.fat }]}>Yağ</Text>
-                      <Text style={styles.macroItemVal}>
-                        {Math.round(baseResult.fat * multiplier)}g
-                      </Text>
+                  <View style={styles.hairlineSection}>
+                    <Text style={styles.subLabel}>Porsiyon Çarpanı</Text>
+                    <View style={styles.segmentBar}>
+                      {PORTION_MULTIPLIERS.map((p) => {
+                        const active = multiplier === p.value;
+                        return (
+                          <TouchableOpacity
+                            key={p.value}
+                            onPress={() => setMultiplier(p.value)}
+                            style={[
+                              styles.segmentBtn,
+                              active && styles.segmentBtnActive,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.segmentText,
+                                active && styles.segmentTextActive,
+                              ]}
+                            >
+                              {p.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
                     </View>
                   </View>
 
                   {baseResult.aiTip ? (
-                    <View style={styles.aiTipBox}>
-                      <Ionicons name="sparkles" size={14} color={COLORS.nvidia} />
-                      <Text style={styles.aiTipContent}>{baseResult.aiTip}</Text>
+                    <View style={styles.hairlineSection}>
+                      <Text style={styles.tipText}>{baseResult.aiTip}</Text>
                     </View>
                   ) : null}
 
-                  <TouchableOpacity style={styles.saveToMealBtn} onPress={handleSave}>
-                    <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
-                    <Text style={styles.saveToMealBtnText}>Öğüne Ekle</Text>
-                  </TouchableOpacity>
+                  <View style={styles.hairlineSection}>
+                    <TouchableOpacity
+                      style={styles.saveBtn}
+                      onPress={handleSave}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.saveBtnText}>Öğün Kayıtlarına Ekle</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               )}
             </ScrollView>
           </View>
-        </TouchableOpacity>
+        </View>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -380,196 +391,272 @@ const styles = StyleSheet.create({
   keyboardContainer: { flex: 1 },
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.82)',
+    backgroundColor: 'rgba(28, 25, 23, 0.45)',
     justifyContent: 'flex-end',
   },
-  modalContent: {
-    backgroundColor: COLORS.card,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: 20,
+  sheet: {
+    backgroundColor: COLORS.background,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
     maxHeight: '92%',
     borderTopWidth: 1,
-    borderColor: COLORS.cardBorder,
+    borderColor: COLORS.border,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
   },
-  title: { fontSize: 18, fontWeight: '800', color: COLORS.text },
-  subtitle: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
-  missingKeyBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#351316',
-    borderWidth: 1,
-    borderColor: '#7F1D1D',
-    padding: 12,
-    borderRadius: 14,
-    marginBottom: 14,
+  title: {
+    fontFamily: FONTS.displayBold,
+    fontSize: 17,
+    color: COLORS.ink,
   },
-  missingKeyTitle: { color: '#FCA5A5', fontSize: 13, fontWeight: '800' },
-  missingKeySub: { color: '#FECACA', fontSize: 11, marginTop: 2 },
-  mealTypeRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 14,
+  subtitle: {
+    fontFamily: FONTS.mono,
+    fontSize: 11,
+    color: COLORS.inkMuted,
+    marginTop: 2,
   },
-  mealTypeChip: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: COLORS.cardSecondary,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-  },
-  mealTypeChipActive: {
-    backgroundColor: COLORS.primaryGlow,
-    borderColor: COLORS.primary,
-  },
-  mealTypeText: { color: COLORS.textSecondary, fontSize: 12, fontWeight: '600' },
-  mealTypeTextActive: { color: COLORS.primaryLight, fontWeight: '800' },
-  photoActionsRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
-  photoActionBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: COLORS.cardSecondary,
-    paddingVertical: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-  },
-  photoActionPrimary: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  photoBtnText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
-  photoBtnTextSecondary: { color: COLORS.text, fontSize: 13, fontWeight: '600' },
-  previewContainer: { marginBottom: 14, borderRadius: 16, overflow: 'hidden' },
-  previewImage: { width: '100%', height: 170, borderRadius: 16 },
-  inputLabel: { fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 8 },
-  textInputBox: {
-    backgroundColor: COLORS.cardSecondary,
-    borderRadius: 16,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-    marginBottom: 12,
-  },
-  textInput: {
-    color: COLORS.text,
-    fontSize: 14,
-    minHeight: 54,
-    textAlignVertical: 'top',
-  },
-  analyzeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: COLORS.nvidia,
-    paddingVertical: 11,
-    borderRadius: 12,
-    marginTop: 8,
-  },
-  analyzeBtnDisabled: { opacity: 0.4 },
-  analyzeBtnText: { color: '#FFF', fontSize: 13, fontWeight: '800' },
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#2D1215',
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#EF4444',
-    marginBottom: 12,
-  },
-  errorText: { color: '#FCA5A5', fontSize: 12, flex: 1, fontWeight: '600' },
-  loadingBox: { alignItems: 'center', paddingVertical: 20, gap: 10 },
-  loadingText: { color: COLORS.nvidia, fontSize: 13, fontWeight: '600', textAlign: 'center' },
-  resultCard: {
-    backgroundColor: COLORS.cardSecondary,
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1.5,
-    borderColor: COLORS.primary,
-    marginBottom: 20,
-  },
-  resultHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  resultName: { fontSize: 17, fontWeight: '800', color: COLORS.text },
-  resultPortion: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
-  calBadge: {
-    backgroundColor: COLORS.primaryGlow,
+  closeBtn: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 14,
-    alignItems: 'center',
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: COLORS.primary,
+    borderColor: COLORS.borderStrong,
+    backgroundColor: COLORS.background,
   },
-  calBadgeNumber: { fontSize: 20, fontWeight: '900', color: COLORS.primaryLight },
-  calBadgeUnit: { fontSize: 10, fontWeight: '700', color: COLORS.primaryLight },
-  portionLabel: { color: COLORS.textSecondary, fontSize: 11, fontWeight: '700', marginBottom: 6 },
-  multiplierRow: { flexDirection: 'row', gap: 6, marginBottom: 12 },
-  multBtn: {
-    flex: 1,
-    paddingVertical: 7,
-    backgroundColor: COLORS.card,
-    borderRadius: 10,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
+  closeBtnText: {
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 12,
+    color: COLORS.ink,
   },
-  multBtnActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
+  scrollBody: {
+    padding: 20,
+    paddingBottom: 36,
   },
-  multText: { color: COLORS.textSecondary, fontSize: 11, fontWeight: '600' },
-  multTextActive: { color: '#FFF', fontWeight: '800' },
-  macrosRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  macroItem: {
-    flex: 1,
-    backgroundColor: COLORS.card,
-    borderRadius: 12,
-    padding: 10,
-    alignItems: 'center',
-    borderWidth: 1,
+  fieldLabel: {
+    fontFamily: FONTS.display,
+    fontSize: 13,
+    color: COLORS.ink,
+    marginBottom: 8,
+    marginTop: 6,
   },
-  macroItemTitle: { fontSize: 11, fontWeight: '700' },
-  macroItemVal: { fontSize: 14, fontWeight: '800', color: COLORS.text, marginTop: 2 },
-  aiTipBox: {
+  subLabel: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 12,
+    color: COLORS.inkSecondary,
+    marginBottom: 8,
+  },
+  segmentBar: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: COLORS.nvidiaGlow,
-    padding: 10,
-    borderRadius: 12,
+    backgroundColor: COLORS.surfaceMuted,
+    padding: 4,
+    borderRadius: 8,
+    gap: 4,
     marginBottom: 14,
-    borderWidth: 1,
-    borderColor: COLORS.nvidia + '40',
   },
-  aiTipContent: { color: '#D1E7A3', fontSize: 12, fontWeight: '500', flex: 1 },
-  saveToMealBtn: {
-    backgroundColor: COLORS.primary,
-    flexDirection: 'row',
-    justifyContent: 'center',
+  segmentBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 5,
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 14,
   },
-  saveToMealBtnText: { color: '#FFF', fontSize: 15, fontWeight: '800' },
+  segmentBtnActive: {
+    backgroundColor: COLORS.surface,
+  },
+  segmentText: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 12,
+    color: COLORS.inkMuted,
+  },
+  segmentTextActive: {
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.ink,
+  },
+  photoActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16,
+  },
+  photoBtnPrimary: {
+    flex: 1,
+    backgroundColor: COLORS.ink,
+    paddingVertical: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  photoBtnPrimaryText: {
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 13,
+    color: COLORS.surface,
+  },
+  photoBtnSecondary: {
+    flex: 1,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.borderStrong,
+    paddingVertical: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  photoBtnSecondaryText: {
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 13,
+    color: COLORS.ink,
+  },
+  previewBox: {
+    marginBottom: 16,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    overflow: 'hidden',
+  },
+  previewImage: {
+    width: '100%',
+    height: 170,
+  },
+  surfaceGroup: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  inputPadding: {
+    padding: 14,
+  },
+  textInput: {
+    fontFamily: FONTS.body,
+    fontSize: 14,
+    color: COLORS.ink,
+    minHeight: 58,
+    textAlignVertical: 'top',
+  },
+  inputActionRow: {
+    padding: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    backgroundColor: COLORS.surface,
+  },
+  calcBtn: {
+    backgroundColor: COLORS.accent,
+    paddingVertical: 11,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  calcBtnDisabled: {
+    opacity: 0.4,
+  },
+  calcBtnText: {
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 13,
+    color: COLORS.surface,
+  },
+  errorBox: {
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.danger,
+    borderRadius: 8,
+    padding: 14,
+    marginBottom: 14,
+  },
+  errorText: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 12,
+    color: COLORS.danger,
+    lineHeight: 18,
+  },
+  errorLinkBtn: {
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  errorLinkText: {
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 12,
+    color: COLORS.ink,
+    textDecorationLine: 'underline',
+  },
+  loadingBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 18,
+  },
+  loadingText: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 13,
+    color: COLORS.inkSecondary,
+  },
+  resultContainer: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.borderStrong,
+    overflow: 'hidden',
+  },
+  resultTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    padding: 16,
+  },
+  resultName: {
+    fontFamily: FONTS.displayBold,
+    fontSize: 17,
+    color: COLORS.ink,
+    marginBottom: 4,
+  },
+  resultInlineMeta: {
+    fontFamily: FONTS.mono,
+    fontSize: 12,
+    color: COLORS.inkSecondary,
+    fontVariant: ['tabular-nums'],
+  },
+  resultCalCol: {
+    alignItems: 'flex-end',
+  },
+  resultCalNumber: {
+    fontFamily: FONTS.monoSemiBold,
+    fontSize: 26,
+    color: COLORS.accent,
+    fontVariant: ['tabular-nums'],
+  },
+  resultCalUnit: {
+    fontFamily: FONTS.mono,
+    fontSize: 11,
+    color: COLORS.inkMuted,
+  },
+  hairlineSection: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  tipText: {
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    color: COLORS.inkSecondary,
+    lineHeight: 18,
+  },
+  saveBtn: {
+    backgroundColor: COLORS.ink,
+    paddingVertical: 13,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  saveBtnText: {
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 14,
+    color: COLORS.surface,
+  },
 });

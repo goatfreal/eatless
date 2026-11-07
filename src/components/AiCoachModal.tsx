@@ -11,8 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../theme/colors';
+import { COLORS, FONTS } from '../theme/colors';
 import { FoodItem, UserProfile } from '../types/nutrition';
 import { askNvidiaDietitianCoach } from '../services/nvidiaAiService';
 
@@ -31,11 +30,11 @@ interface ChatMessage {
   isError?: boolean;
 }
 
-const QUICK_QUESTIONS = [
+const QUICK_PROMPTS = [
   'Kalan kalorimle akşam ne yemeliyim?',
-  'Günlük proteinimi nasıl tamamlarım?',
-  'Bugünkü beslenmemi değerlendirir misin?',
-  'Yağ yakımını hızlandırmak için ne yapmalıyım?',
+  'Günlük protein hedefimi nasıl tamamlarım?',
+  'Bugünkü beslenmemi değerlendir',
+  'Yağ yakımını hızlandırmak için öneri ver',
 ];
 
 export const AiCoachModal: React.FC<AiCoachModalProps> = ({
@@ -43,7 +42,6 @@ export const AiCoachModal: React.FC<AiCoachModalProps> = ({
   profile,
   mealsToday,
   onClose,
-  onOpenSettings,
 }) => {
   const consumed = mealsToday.reduce(
     (acc, m) => {
@@ -60,7 +58,13 @@ export const AiCoachModal: React.FC<AiCoachModalProps> = ({
     {
       id: 'welcome',
       sender: 'coach',
-      text: `Merhaba ${profile.name}! Ben kişisel NVIDIA AI Diyetisyeninim. Günlük hedefin ${profile.targets.calories} kcal ve bugün şu ana kadar ${consumed.cal} kcal (${consumed.p}g protein) aldın. Beslenmen veya antrenmanların hakkında ne sormak istersin?`,
+      text: `Merhaba ${
+        profile.name || 'Dostum'
+      }. Günlük bütçen ${profile.targets.calories} kcal ve bugün şu ana kadar ${
+        consumed.cal
+      } kcal (${consumed.p}g protein · ${consumed.c}g karbonhidrat · ${
+        consumed.f
+      }g yağ) aldın. Beslenme planın veya öğün tercihlerin hakkında ne sormak istersin?`,
     },
   ]);
   const [inputText, setInputText] = useState('');
@@ -68,9 +72,13 @@ export const AiCoachModal: React.FC<AiCoachModalProps> = ({
 
   const handleSend = async (questionText?: string) => {
     const q = (questionText || inputText).trim();
-    if (!q) return;
+    if (!q || isLoading) return;
 
-    const userMsg: ChatMessage = { id: Date.now().toString(), sender: 'user', text: q };
+    const userMsg: ChatMessage = {
+      id: Date.now().toString(),
+      sender: 'user',
+      text: q,
+    };
     setMessages((prev) => [...prev, userMsg]);
     setInputText('');
     setIsLoading(true);
@@ -97,7 +105,7 @@ export const AiCoachModal: React.FC<AiCoachModalProps> = ({
         {
           id: (Date.now() + 1).toString(),
           sender: 'coach',
-          text: err?.message || 'NVIDIA sunucusuna bağlanılamadı.',
+          text: err?.message || 'Sunucuya ulaşılamadı.',
           isError: true,
         },
       ]);
@@ -112,92 +120,104 @@ export const AiCoachModal: React.FC<AiCoachModalProps> = ({
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardContainer}
       >
-        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
-          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+        <View style={styles.overlay}>
+          <View style={styles.sheet}>
             {/* Header */}
             <View style={styles.header}>
-              <View style={styles.headerLeft}>
-                <View style={styles.coachAvatar}>
-                  <Ionicons name="chatbubbles" size={20} color={COLORS.nvidia} />
-                </View>
-                <View>
-                  <Text style={styles.title}>NVIDIA AI Diyetisyen ({profile.name})</Text>
-                  <Text style={styles.subtitle}>
-                    {profile.nvidiaTextModel || 'meta/llama-3.1-70b-instruct'}
-                  </Text>
-                </View>
+              <View>
+                <Text style={styles.title}>Klinik Beslenme Koçu</Text>
+                <Text style={styles.subtitle}>
+                  Hedef {profile.targets.calories} kcal · Alınan {consumed.cal} kcal ·{' '}
+                  {consumed.p}g P
+                </Text>
               </View>
-              <TouchableOpacity onPress={onClose}>
-                <Ionicons name="close-circle" size={26} color={COLORS.textMuted} />
+              <TouchableOpacity
+                onPress={onClose}
+                activeOpacity={0.75}
+                style={styles.closeBtn}
+              >
+                <Text style={styles.closeBtnText}>Kapat</Text>
               </TouchableOpacity>
             </View>
 
-            {!profile.nvidiaApiKey?.startsWith('nvapi-') && (
-              <TouchableOpacity
-                style={styles.warningBanner}
-                onPress={() => {
-                  onClose();
-                  onOpenSettings();
-                }}
-              >
-                <Ionicons name="key-outline" size={16} color="#FCA5A5" />
-                <Text style={styles.warningText}>
-                  NVIDIA API Anahtarınız eksik! Buraya dokunarak Ayarlar'dan ekleyin.
-                </Text>
-              </TouchableOpacity>
-            )}
-
-            {/* Chat Messages */}
-            <ScrollView style={styles.chatScroll} showsVerticalScrollIndicator={false}>
+            {/* Messages */}
+            <ScrollView
+              style={styles.chatScroll}
+              contentContainerStyle={styles.chatContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
               {messages.map((m) => (
                 <View
                   key={m.id}
                   style={[
-                    styles.msgBubble,
-                    m.sender === 'user' ? styles.userBubble : styles.coachBubble,
-                    m.isError && styles.errorBubble,
+                    styles.msgBox,
+                    m.sender === 'user' ? styles.userBox : styles.coachBox,
+                    m.isError && styles.errorBox,
                   ]}
                 >
-                  <Text style={styles.msgText}>{m.text}</Text>
+                  <Text style={styles.msgRole}>
+                    {m.sender === 'user' ? profile.name || 'Siz' : 'Klinik Diyetisyen'}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.msgText,
+                      m.sender === 'user' && styles.userMsgText,
+                      m.isError && styles.errorMsgText,
+                    ]}
+                  >
+                    {m.text}
+                  </Text>
                 </View>
               ))}
 
               {isLoading && (
-                <View style={styles.loadingBubble}>
-                  <ActivityIndicator size="small" color={COLORS.nvidia} />
-                  <Text style={styles.loadingText}>NVIDIA Llama-3.1 yanıt üretiyor...</Text>
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator size="small" color={COLORS.ink} />
+                  <Text style={styles.loadingText}>Analiz yanıtı hazırlanıyor...</Text>
                 </View>
               )}
             </ScrollView>
 
-            {/* Quick Suggestions */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsRow}>
-              {QUICK_QUESTIONS.map((q, i) => (
-                <TouchableOpacity key={i} style={styles.chip} onPress={() => handleSend(q)}>
-                  <Text style={styles.chipText}>{q}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+            {/* Quick Prompt Buttons (rounded-md = 6px, NOT rounded-full pills) */}
+            <View style={styles.promptsBar}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {QUICK_PROMPTS.map((q, i) => (
+                  <TouchableOpacity
+                    key={i}
+                    style={styles.promptBtn}
+                    onPress={() => handleSend(q)}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={styles.promptBtnText}>{q}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
 
-            {/* Input */}
-            <View style={styles.inputRow}>
+            {/* Input Footer */}
+            <View style={styles.inputFooter}>
               <TextInput
                 style={styles.input}
-                placeholder="Diyetisyenine sor..."
-                placeholderTextColor={COLORS.textMuted}
+                placeholder="Beslenme veya makro sorunuzu yazın..."
+                placeholderTextColor={COLORS.inkMuted}
                 value={inputText}
                 onChangeText={setInputText}
               />
               <TouchableOpacity
-                style={[styles.sendBtn, !inputText.trim() && styles.sendBtnDisabled]}
+                style={[
+                  styles.sendBtn,
+                  (!inputText.trim() || isLoading) && styles.sendBtnDisabled,
+                ]}
                 onPress={() => handleSend()}
                 disabled={!inputText.trim() || isLoading}
+                activeOpacity={0.8}
               >
-                <Ionicons name="arrow-up" size={18} color="#FFF" />
+                <Text style={styles.sendBtnText}>Gönder</Text>
               </TouchableOpacity>
             </View>
           </View>
-        </TouchableOpacity>
+        </View>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -207,113 +227,169 @@ const styles = StyleSheet.create({
   keyboardContainer: { flex: 1 },
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.82)',
+    backgroundColor: 'rgba(28, 25, 23, 0.45)',
     justifyContent: 'flex-end',
   },
-  modalContent: {
-    backgroundColor: COLORS.card,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: 20,
-    height: '86%',
+  sheet: {
+    backgroundColor: COLORS.background,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
+    height: '88%',
     borderTopWidth: 1,
-    borderColor: COLORS.cardBorder,
+    borderColor: COLORS.border,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
-    paddingBottom: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.cardBorder + '60',
+    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
   },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  coachAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.nvidiaGlow,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.nvidia,
+  title: {
+    fontFamily: FONTS.displayBold,
+    fontSize: 17,
+    color: COLORS.ink,
   },
-  title: { fontSize: 16, fontWeight: '800', color: COLORS.text },
-  subtitle: { fontSize: 11, color: COLORS.nvidia, fontWeight: '600' },
-  warningBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#351316',
-    padding: 10,
-    borderRadius: 12,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#7F1D1D',
+  subtitle: {
+    fontFamily: FONTS.mono,
+    fontSize: 11,
+    color: COLORS.inkMuted,
+    marginTop: 2,
+    fontVariant: ['tabular-nums'],
   },
-  warningText: { color: '#FCA5A5', fontSize: 12, fontWeight: '600', flex: 1 },
-  chatScroll: { flex: 1, marginBottom: 10 },
-  msgBubble: {
-    maxWidth: '84%',
-    padding: 12,
-    borderRadius: 16,
-    marginBottom: 10,
-  },
-  coachBubble: {
-    backgroundColor: COLORS.cardSecondary,
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-  },
-  userBubble: {
-    backgroundColor: COLORS.primary,
-    alignSelf: 'flex-end',
-  },
-  errorBubble: {
-    backgroundColor: '#351316',
-    borderColor: '#EF4444',
-  },
-  msgText: { color: '#FFF', fontSize: 14, lineHeight: 20 },
-  loadingBubble: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: COLORS.cardSecondary,
-    padding: 10,
-    borderRadius: 14,
-    alignSelf: 'flex-start',
-  },
-  loadingText: { color: COLORS.textSecondary, fontSize: 12 },
-  chipsRow: { flexDirection: 'row', maxHeight: 38, marginBottom: 10 },
-  chip: {
-    backgroundColor: COLORS.cardSecondary,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 16,
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-  },
-  chipText: { color: COLORS.primaryLight, fontSize: 12, fontWeight: '600' },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.cardSecondary,
-    borderRadius: 16,
+  closeBtn: {
     paddingHorizontal: 12,
     paddingVertical: 6,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: COLORS.cardBorder,
+    borderColor: COLORS.borderStrong,
+    backgroundColor: COLORS.background,
   },
-  input: { flex: 1, color: COLORS.text, fontSize: 14, paddingVertical: 8 },
+  closeBtnText: {
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 12,
+    color: COLORS.ink,
+  },
+  chatScroll: {
+    flex: 1,
+  },
+  chatContent: {
+    padding: 16,
+    gap: 12,
+  },
+  msgBox: {
+    padding: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  coachBox: {
+    backgroundColor: COLORS.surface,
+    borderColor: COLORS.border,
+    alignSelf: 'stretch',
+  },
+  userBox: {
+    backgroundColor: COLORS.surfaceMuted,
+    borderColor: COLORS.borderStrong,
+    alignSelf: 'stretch',
+  },
+  errorBox: {
+    backgroundColor: COLORS.surface,
+    borderColor: COLORS.danger,
+  },
+  msgRole: {
+    fontFamily: FONTS.monoMedium,
+    fontSize: 10,
+    color: COLORS.inkMuted,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  msgText: {
+    fontFamily: FONTS.body,
+    fontSize: 14,
+    color: COLORS.ink,
+    lineHeight: 21,
+  },
+  userMsgText: {
+    fontFamily: FONTS.bodyMedium,
+    color: COLORS.ink,
+  },
+  errorMsgText: {
+    color: COLORS.danger,
+  },
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+  },
+  loadingText: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 12,
+    color: COLORS.inkSecondary,
+  },
+  promptsBar: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    backgroundColor: COLORS.background,
+  },
+  promptBtn: {
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: COLORS.borderStrong,
+    marginRight: 8,
+  },
+  promptBtnText: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 12,
+    color: COLORS.ink,
+  },
+  inputFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    backgroundColor: COLORS.surface,
+    gap: 8,
+  },
+  input: {
+    flex: 1,
+    height: 40,
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.borderStrong,
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    fontFamily: FONTS.body,
+    fontSize: 13,
+    color: COLORS.ink,
+  },
   sendBtn: {
-    backgroundColor: COLORS.primary,
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    height: 40,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    backgroundColor: COLORS.ink,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  sendBtnDisabled: { opacity: 0.3 },
+  sendBtnDisabled: {
+    opacity: 0.35,
+  },
+  sendBtnText: {
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 13,
+    color: COLORS.surface,
+  },
 });

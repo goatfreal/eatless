@@ -1,29 +1,32 @@
 export const COLORS = {
-  background: '#0B0C10',
-  card: '#16171F',
-  cardSecondary: '#20222C',
-  cardBorder: '#272936',
-  text: '#FFFFFF',
-  textSecondary: '#9496A1',
-  textMuted: '#646672',
+  // 60% Dominant Neutral Canvas (Warm Editorial Paper)
+  background: '#FAF8F5',
 
-  // Welmi Primary & Highlights
-  primary: '#10B981',        // Emerald Green
-  primaryLight: '#34D399',
-  primaryGlow: 'rgba(16, 185, 129, 0.15)',
+  // 30% Structural Surfaces & Hairline Dividers
+  surface: '#FFFFFF',
+  surfaceMuted: '#F3EFEA',
+  border: '#E6E2DA',
+  borderStrong: '#D6D1C7',
 
-  // Macros
-  protein: '#F43F5E',        // Rose / Pink
-  carbs: '#0EA5E9',          // Sky Blue
-  fat: '#F59E0B',            // Amber Yellow
+  // Solid High-Contrast Ink Hierarchy
+  ink: '#1C1917',          // Stone 900 - Primary headings & numbers
+  inkSecondary: '#57534E', // Stone 600 - Body prose
+  inkMuted: '#78716C',     // Stone 500 - Quiet inline metadata
 
-  // Health tracking
-  water: '#06B6D4',          // Aqua Blue
-  fasting: '#8B5CF6',        // Purple
+  // 10% High-Intent Accent Budget
+  accent: '#14532D',       // Forest Ink - Primary CTAs & active states
+  terracotta: '#C84B31',   // Terracotta - Secondary emphasis / alerts
+  cobalt: '#1D4ED8',       // Deep Cobalt - Hydration / secondary metric
+  danger: '#B91C1C',       // Crimson Ink - Error / delete
+};
 
-  // NVIDIA Brand
-  nvidia: '#76B900',         // NVIDIA Electric Green
-  nvidiaGlow: 'rgba(118, 185, 0, 0.15)',
-
-  danger: '#EF4444',
+export const FONTS = {
+  display: 'Outfit_600SemiBold',
+  displayBold: 'Outfit_700Bold',
+  body: 'PlusJakartaSans_400Regular',
+  bodyMedium: 'PlusJakartaSans_500Medium',
+  bodySemiBold: 'PlusJakartaSans_600SemiBold',
+  mono: 'JetBrainsMono_400Regular',
+  monoMedium: 'JetBrainsMono_500Medium',
+  monoSemiBold: 'JetBrainsMono_600SemiBold',
 };

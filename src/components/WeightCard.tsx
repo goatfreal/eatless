@@ -1,265 +1,217 @@
 import React, { useState } from 'react';
 import {
-  Modal,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../theme/colors';
+import { COLORS, FONTS } from '../theme/colors';
+import { WeightEntry } from '../types/nutrition';
+import { calculateBMI } from '../utils/calorieCalculator';
 
 interface WeightCardProps {
-  currentWeight: number;
-  targetWeight: number;
-  onUpdateWeight: (newWeight: number, newTarget: number) => void;
+  currentWeightKg: number;
+  targetWeightKg: number;
+  heightCm: number;
+  history: WeightEntry[];
+  onLogWeight: (weightKg: number) => void;
 }
 
 export const WeightCard: React.FC<WeightCardProps> = ({
-  currentWeight,
-  targetWeight,
-  onUpdateWeight,
+  currentWeightKg,
+  targetWeightKg,
+  heightCm,
+  history,
+  onLogWeight,
 }) => {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [inputCurrent, setInputCurrent] = useState(currentWeight.toString());
-  const [inputTarget, setInputTarget] = useState(targetWeight.toString());
-
-  const diff = (currentWeight - targetWeight).toFixed(1);
-  const isLoss = currentWeight > targetWeight;
+  const [inputVal, setInputVal] = useState('');
+  const { bmi, category } = calculateBMI(currentWeightKg, heightCm);
+  const diff = +(currentWeightKg - targetWeightKg).toFixed(1);
 
   const handleSave = () => {
-    const c = parseFloat(inputCurrent) || currentWeight;
-    const t = parseFloat(inputTarget) || targetWeight;
-    onUpdateWeight(c, t);
-    setIsModalOpen(false);
+    const parsed = parseFloat(inputVal.replace(',', '.'));
+    if (!isNaN(parsed) && parsed >= 30 && parsed <= 250) {
+      onLogWeight(parsed);
+      setInputVal('');
+    }
   };
 
   return (
-    <View style={styles.card}>
-      <View style={styles.header}>
-        <View style={styles.left}>
-          <View style={styles.iconCircle}>
-            <Ionicons name="scale-outline" size={18} color="#F59E0B" />
+    <View style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>05. Vücut Ölçüleri ve VKİ</Text>
+        <Text style={styles.sectionMeta}>
+          VKİ {bmi} · {category}
+        </Text>
+      </View>
+
+      <View style={styles.container}>
+        <View style={styles.summaryBlock}>
+          <View style={styles.metricCol}>
+            <Text style={styles.metricLabel}>Güncel Ağırlık</Text>
+            <Text style={styles.metricValue}>{currentWeightKg} kg</Text>
           </View>
-          <View>
-            <Text style={styles.title}>Kilo & Hedef Takibi</Text>
-            <Text style={styles.subtitle}>
-              Mevcut: {currentWeight} kg • Hedef: {targetWeight} kg
+
+          <View style={styles.metricCol}>
+            <Text style={styles.metricLabel}>Hedef Ağırlık</Text>
+            <Text style={styles.metricValue}>{targetWeightKg} kg</Text>
+          </View>
+
+          <View style={styles.metricCol}>
+            <Text style={styles.metricLabel}>Kalan Fark</Text>
+            <Text style={styles.metricValue}>
+              {diff > 0 ? `-${diff}` : diff < 0 ? `+${Math.abs(diff)}` : '0'} kg
             </Text>
           </View>
         </View>
 
-        <TouchableOpacity
-          style={styles.editBtn}
-          onPress={() => setIsModalOpen(true)}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="pencil" size={13} color={COLORS.textSecondary} />
-          <Text style={styles.editBtnText}>Güncelle</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.badgeRow}>
-        <View style={styles.badge}>
-          <Ionicons
-            name={isLoss ? 'trending-down-outline' : 'trending-up-outline'}
-            size={14}
-            color={COLORS.primaryLight}
+        <View style={styles.inputRow}>
+          <TextInput
+            style={styles.input}
+            placeholder="Yeni tartım girin (örn: 74.4)"
+            placeholderTextColor={COLORS.inkMuted}
+            keyboardType="decimal-pad"
+            value={inputVal}
+            onChangeText={setInputVal}
           />
-          <Text style={styles.badgeText}>
-            Hedefe Kalan: {Math.abs(parseFloat(diff))} kg {isLoss ? '(Vermek için)' : '(Almak için)'}
-          </Text>
+          <TouchableOpacity
+            onPress={handleSave}
+            activeOpacity={0.75}
+            style={styles.saveBtn}
+          >
+            <Text style={styles.saveBtnText}>Kaydet</Text>
+          </TouchableOpacity>
         </View>
-      </View>
 
-      {/* Weight Edit Modal */}
-      <Modal visible={isModalOpen} transparent animationType="fade" onRequestClose={() => setIsModalOpen(false)}>
-        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setIsModalOpen(false)}>
-          <View style={styles.modalCard} onStartShouldSetResponder={() => true}>
-            <Text style={styles.modalTitle}>Kilo Bilgilerini Güncelle</Text>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Mevcut Kilonuz (kg):</Text>
-              <TextInput
-                style={styles.input}
-                keyboardType="decimal-pad"
-                value={inputCurrent}
-                onChangeText={setInputCurrent}
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Hedef Kilonuz (kg):</Text>
-              <TextInput
-                style={styles.input}
-                keyboardType="decimal-pad"
-                value={inputTarget}
-                onChangeText={setInputTarget}
-              />
-            </View>
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={() => setIsModalOpen(false)}
-              >
-                <Text style={styles.cancelBtnText}>Vazgeç</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-                <Text style={styles.saveBtnText}>Kaydet</Text>
-              </TouchableOpacity>
-            </View>
+        {history.length > 0 && (
+          <View style={styles.historyBlock}>
+            <Text style={styles.historyTitle}>Son Tartım Kayıtları</Text>
+            {history.slice(0, 4).map((entry) => (
+              <View key={entry.id} style={styles.historyRow}>
+                <Text style={styles.historyDate}>{entry.date}</Text>
+                <Text style={styles.historyVal}>{entry.weightKg} kg</Text>
+              </View>
+            ))}
           </View>
-        </TouchableOpacity>
-      </Modal>
+        )}
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: COLORS.card,
-    marginHorizontal: 20,
-    marginTop: 12,
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
+  section: {
+    marginHorizontal: 16,
+    marginTop: 22,
+    marginBottom: 28,
   },
-  header: {
+  sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'baseline',
     marginBottom: 8,
   },
-  left: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  iconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: '#F59E0B18',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  title: {
+  sectionTitle: {
+    fontFamily: FONTS.displayBold,
     fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.text,
+    color: COLORS.ink,
+    letterSpacing: -0.2,
   },
-  subtitle: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 2,
+  sectionMeta: {
+    fontFamily: FONTS.mono,
+    fontSize: 11,
+    color: COLORS.inkMuted,
+    fontVariant: ['tabular-nums'],
   },
-  editBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: COLORS.cardSecondary,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+  container: {
+    backgroundColor: COLORS.surface,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: COLORS.cardBorder,
+    borderColor: COLORS.border,
+    overflow: 'hidden',
   },
-  editBtnText: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  badgeRow: {
+  summaryBlock: {
     flexDirection: 'row',
-    marginTop: 6,
+    justifyContent: 'space-between',
+    padding: 16,
   },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: COLORS.primaryGlow,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: COLORS.primary + '30',
-  },
-  badgeText: {
-    color: COLORS.primaryLight,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  overlay: {
+  metricCol: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
   },
-  modalCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 20,
-    padding: 20,
-    width: '100%',
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
+  metricLabel: {
+    fontFamily: FONTS.body,
+    fontSize: 11,
+    color: COLORS.inkMuted,
+    marginBottom: 4,
   },
-  modalTitle: {
+  metricValue: {
+    fontFamily: FONTS.monoSemiBold,
     fontSize: 18,
-    fontWeight: '800',
-    color: COLORS.text,
-    marginBottom: 16,
+    color: COLORS.ink,
+    fontVariant: ['tabular-nums'],
   },
-  inputGroup: {
-    marginBottom: 14,
-  },
-  inputLabel: {
-    color: COLORS.textSecondary,
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 6,
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    gap: 8,
   },
   input: {
-    backgroundColor: COLORS.cardSecondary,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: COLORS.text,
-    fontSize: 16,
-    fontWeight: '700',
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 10,
-  },
-  cancelBtn: {
     flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    backgroundColor: COLORS.cardSecondary,
-    borderRadius: 12,
-  },
-  cancelBtnText: {
-    color: COLORS.textSecondary,
-    fontSize: 14,
-    fontWeight: '600',
+    height: 38,
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.borderStrong,
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    fontFamily: FONTS.mono,
+    fontSize: 13,
+    color: COLORS.ink,
   },
   saveBtn: {
-    flex: 1,
-    paddingVertical: 12,
+    height: 38,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    backgroundColor: COLORS.ink,
+    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.primary,
-    borderRadius: 12,
   },
   saveBtnText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '700',
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 12,
+    color: COLORS.surface,
+  },
+  historyBlock: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  historyTitle: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 11,
+    color: COLORS.inkMuted,
+    marginBottom: 6,
+  },
+  historyRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  historyDate: {
+    fontFamily: FONTS.mono,
+    fontSize: 11,
+    color: COLORS.inkSecondary,
+    fontVariant: ['tabular-nums'],
+  },
+  historyVal: {
+    fontFamily: FONTS.monoSemiBold,
+    fontSize: 11,
+    color: COLORS.ink,
+    fontVariant: ['tabular-nums'],
   },
 });

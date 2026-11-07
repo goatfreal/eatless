@@ -31,14 +31,9 @@ export function calculatePersonalTargets(
   }
 
   // 4. Macros
-  // Protein: 1.8g - 2.0g per kg of body weight
   const proteinRatio = goalType === 'lose' || goalType === 'gain' ? 2.0 : 1.6;
   const protein = Math.round(weightKg * proteinRatio);
-
-  // Fat: 25% of total calories (1g fat = 9 kcal)
   const fat = Math.round((calories * 0.25) / 9);
-
-  // Carbs: Remaining calories (1g carb = 4 kcal, 1g protein = 4 kcal)
   const remainingCalForCarbs = Math.max(200, calories - protein * 4 - fat * 9);
   const carbs = Math.round(remainingCalForCarbs / 4);
 
@@ -56,13 +51,24 @@ export function calculatePersonalTargets(
   };
 }
 
-export function calculateBMI(heightCm: number, weightKg: number): { bmi: number; label: string; color: string } {
-  if (!heightCm || !weightKg) return { bmi: 0, label: '-', color: '#9496A1' };
+export function calculateBMI(
+  weightKg: number,
+  heightCm: number
+): { bmi: number; category: string; label: string; color: string } {
+  if (!heightCm || !weightKg) {
+    return { bmi: 0, category: '-', label: '-', color: '#78716C' };
+  }
   const heightM = heightCm / 100;
   const bmi = parseFloat((weightKg / (heightM * heightM)).toFixed(1));
 
-  if (bmi < 18.5) return { bmi, label: 'Zayıf', color: '#38BDF8' };
-  if (bmi < 25) return { bmi, label: 'Normal (İdeal)', color: '#10B981' };
-  if (bmi < 30) return { bmi, label: 'Fazla Kilolu', color: '#F59E0B' };
-  return { bmi, label: 'Obezite Sınırı', color: '#EF4444' };
+  if (bmi < 18.5) {
+    return { bmi, category: 'Düşük Ağırlık', label: 'Düşük Ağırlık', color: '#1D4ED8' };
+  }
+  if (bmi < 25) {
+    return { bmi, category: 'Normal (İdeal)', label: 'Normal (İdeal)', color: '#14532D' };
+  }
+  if (bmi < 30) {
+    return { bmi, category: 'Fazla Kilolu', label: 'Fazla Kilolu', color: '#C84B31' };
+  }
+  return { bmi, category: 'Obezite Sınırı', label: 'Obezite Sınırı', color: '#B91C1C' };
 }

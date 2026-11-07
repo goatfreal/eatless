@@ -2,12 +2,12 @@
   "expo": {
     "name": "Eatless",
     "slug": "eatless",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "light",
     "splash": {
-      "backgroundColor": "#0D0E12"
+      "backgroundColor": "#FAF8F5"
     },
     "ios": {
       "supportsTablet": true,
@@ -19,12 +19,15 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#0D0E12"
+        "backgroundColor": "#FAF8F5"
       },
       "package": "com.eatless.calorie"
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-font"
+    ]
   }
 }

@@ -11,7 +11,21 @@ import {
   View,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { Ionicons } from '@expo/vector-icons';
+import { useFonts } from 'expo-font';
+import {
+  Outfit_600SemiBold,
+  Outfit_700Bold,
+} from '@expo-google-fonts/outfit';
+import {
+  PlusJakartaSans_400Regular,
+  PlusJakartaSans_500Medium,
+  PlusJakartaSans_600SemiBold,
+} from '@expo-google-fonts/plus-jakarta-sans';
+import {
+  JetBrainsMono_400Regular,
+  JetBrainsMono_500Medium,
+  JetBrainsMono_600SemiBold,
+} from '@expo-google-fonts/jetbrains-mono';
 import { OnboardingWizard } from './src/components/OnboardingWizard';
 import { Header } from './src/components/Header';
 import { DailyCalorieCard } from './src/components/DailyCalorieCard';
@@ -22,13 +36,14 @@ import { WeightCard } from './src/components/WeightCard';
 import { AiFoodScannerModal } from './src/components/AiFoodScannerModal';
 import { AiCoachModal } from './src/components/AiCoachModal';
 import { SettingsModal } from './src/components/SettingsModal';
-import { COLORS } from './src/theme/colors';
+import { COLORS, FONTS } from './src/theme/colors';
 import {
-  FastingProtocol,
+  ActiveTab,
   FastingTracker,
   FoodItem,
   MealType,
   UserProfile,
+  WeightEntry,
 } from './src/types/nutrition';
 import {
   INITIAL_PROFILE,
@@ -36,22 +51,37 @@ import {
   loadFastingState,
   loadUserProfile,
   loadWaterIntake,
+  loadWeightHistory,
   saveDailyMeals,
   saveFastingState,
   saveUserProfile,
   saveWaterIntake,
+  saveWeightHistory,
 } from './src/storage/nutritionStorage';
 import { calculatePersonalTargets } from './src/utils/calorieCalculator';
 
 export default function App() {
+  const [fontsLoaded] = useFonts({
+    Outfit_600SemiBold,
+    Outfit_700Bold,
+    PlusJakartaSans_400Regular,
+    PlusJakartaSans_500Medium,
+    PlusJakartaSans_600SemiBold,
+    JetBrainsMono_400Regular,
+    JetBrainsMono_500Medium,
+    JetBrainsMono_600SemiBold,
+  });
+
   const [isLoading, setIsLoading] = useState(true);
   const [profile, setProfile] = useState<UserProfile>(INITIAL_PROFILE);
+  const [activeTab, setActiveTab] = useState<ActiveTab>('home');
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().split('T')[0]
   );
 
   const [meals, setMeals] = useState<FoodItem[]>([]);
   const [waterMl, setWaterMl] = useState<number>(0);
+  const [weightHistory, setWeightHistory] = useState<WeightEntry[]>([]);
   const [fasting, setFasting] = useState<FastingTracker>({
     isFasting: false,
     protocol: '16:8',
@@ -65,7 +95,6 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isCoachOpen, setIsCoachOpen] = useState(false);
 
-  // Load user profile and fasting on app start
   useEffect(() => {
     async function init() {
       const savedProfile = await loadUserProfile();
@@ -74,12 +103,14 @@ export default function App() {
       const savedFasting = await loadFastingState();
       setFasting(savedFasting);
 
+      const savedWeights = await loadWeightHistory();
+      setWeightHistory(savedWeights);
+
       setIsLoading(false);
     }
     init();
   }, []);
 
-  // Load meals and water whenever selectedDate changes
   useEffect(() => {
     async function loadDayData() {
       const savedMeals = await loadDailyMeals(selectedDate);
@@ -115,7 +146,6 @@ export default function App() {
     setIsRefreshing(false);
   };
 
-  // Add food from AI scanner
   const handleSaveFood = (newFood: Omit<FoodItem, 'id' | 'timestamp'>) => {
     const item: FoodItem = {
       ...newFood,
@@ -127,61 +157,48 @@ export default function App() {
     saveDailyMeals(selectedDate, updated);
   };
 
-  // Delete food item
   const handleDeleteFood = (foodId: string) => {
     const updated = meals.filter((m) => m.id !== foodId);
     setMeals(updated);
     saveDailyMeals(selectedDate, updated);
   };
 
-  // Water update
-  const handleUpdateWater = (newMl: number) => {
-    setWaterMl(newMl);
-    saveWaterIntake(selectedDate, newMl);
+  const handleUpdateWater = (deltaMl: number) => {
+    const nextMl = Math.max(0, waterMl + deltaMl);
+    setWaterMl(nextMl);
+    saveWaterIntake(selectedDate, nextMl);
   };
 
-  // Fasting toggle
-  const handleToggleFasting = () => {
-    const nextFasting: FastingTracker = {
-      ...fasting,
-      isFasting: !fasting.isFasting,
-      startTime: !fasting.isFasting ? new Date().toISOString() : null,
-      completedFastsCount: fasting.isFasting
-        ? (fasting.completedFastsCount || 0) + 1
-        : fasting.completedFastsCount || 0,
-    };
+  const handleUpdateFasting = (nextFasting: FastingTracker) => {
     setFasting(nextFasting);
     saveFastingState(nextFasting);
   };
 
-  const handleChangeFastingProtocol = (protocol: FastingProtocol, targetHours: number) => {
-    const nextFasting: FastingTracker = {
-      ...fasting,
-      protocol,
-      targetHours,
-    };
-    setFasting(nextFasting);
-    saveFastingState(nextFasting);
-  };
-
-  // Weight update -> also recalculates BMR/TDEE targets
-  const handleUpdateWeight = (newWeight: number, newTarget: number) => {
+  const handleLogWeight = (newWeightKg: number) => {
     const recalculated = calculatePersonalTargets(
       profile.gender,
       profile.age,
       profile.heightCm,
-      newWeight,
+      newWeightKg,
       profile.activityLevel,
       profile.goalType
     );
-    const updated: UserProfile = {
+    const updatedProfile: UserProfile = {
       ...profile,
-      currentWeightKg: newWeight,
-      targetWeightKg: newTarget,
+      currentWeightKg: newWeightKg,
       targets: recalculated,
     };
-    setProfile(updated);
-    saveUserProfile(updated);
+    setProfile(updatedProfile);
+    saveUserProfile(updatedProfile);
+
+    const newEntry: WeightEntry = {
+      id: Date.now().toString(),
+      date: selectedDate,
+      weightKg: newWeightKg,
+    };
+    const updatedHistory = [newEntry, ...weightHistory].slice(0, 30);
+    setWeightHistory(updatedHistory);
+    saveWeightHistory(updatedHistory);
   };
 
   const handleSaveProfile = (updated: UserProfile) => {
@@ -196,36 +213,99 @@ export default function App() {
     saveUserProfile(reset);
   };
 
-  if (isLoading) {
+  const handleSelectNavTab = (tab: ActiveTab) => {
+    if (tab === 'scanner') {
+      setScannerMealType('lunch');
+      return;
+    }
+    if (tab === 'coach') {
+      setIsCoachOpen(true);
+      return;
+    }
+    if (tab === 'profile') {
+      setIsSettingsOpen(true);
+      return;
+    }
+    setActiveTab(tab);
+  };
+
+  if (isLoading || !fontsLoaded) {
     return (
       <View style={styles.loadingScreen}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+        <ActivityIndicator size="small" color={COLORS.ink} />
       </View>
     );
   }
 
-  // If user has not completed Onboarding Wizard, show Onboarding first!
   if (!profile.isOnboarded) {
     return (
       <>
-        <StatusBar style="light" />
+        <StatusBar style="dark" />
         <OnboardingWizard onComplete={handleCompleteOnboarding} />
       </>
     );
   }
 
+  const totals = meals.reduce(
+    (acc, item) => {
+      acc.calories += item.calories;
+      acc.protein += item.protein;
+      acc.carbs += item.carbs;
+      acc.fat += item.fat;
+      return acc;
+    },
+    { calories: 0, protein: 0, carbs: 0, fat: 0 }
+  );
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const isToday = selectedDate === todayStr;
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
 
       <View style={styles.container}>
+        {/* 3-Zone Top Bar Contract */}
         <Header
-          userName={profile.name}
-          selectedDate={selectedDate}
-          onChangeDate={handleChangeDate}
-          hasNvidiaKey={!!profile.nvidiaApiKey && profile.nvidiaApiKey.startsWith('nvapi-')}
-          onOpenProfile={() => setIsSettingsOpen(true)}
+          activeTab={activeTab}
+          onSelectTab={handleSelectNavTab}
+          onOpenSettings={() => setIsSettingsOpen(true)}
         />
+
+        {/* Editorial Subbar: User Greeting & Date Switcher */}
+        <View style={styles.subBar}>
+          <Text style={styles.greetingText}>
+            {profile.name} ·{' '}
+            {profile.goalType === 'lose'
+              ? 'Kalori Açığı'
+              : profile.goalType === 'gain'
+              ? 'Kas Kazanımı'
+              : 'Denge'}
+          </Text>
+
+          <View style={styles.dateSwitcher}>
+            <TouchableOpacity
+              onPress={() => handleChangeDate(-1)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={styles.dateStepBtn}
+            >
+              <Text style={styles.dateStepText}>‹ Önceki</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.dateLabel}>
+              {isToday ? 'Bugün' : selectedDate}
+            </Text>
+
+            <TouchableOpacity
+              onPress={() => handleChangeDate(1)}
+              disabled={isToday}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={[styles.dateStepBtn, isToday && { opacity: 0.3 }]}
+            >
+              <Text style={styles.dateStepText}>Sonraki ›</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
 
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -234,84 +314,72 @@ export default function App() {
             <RefreshControl
               refreshing={isRefreshing}
               onRefresh={onRefresh}
-              tintColor={COLORS.primary}
+              tintColor={COLORS.ink}
             />
           }
         >
-          {/* Daily Calorie & Macro Target Card */}
-          <DailyCalorieCard targets={profile.targets} meals={meals} />
+          {activeTab === 'fasting' ? (
+            <>
+              <FastingCard
+                tracker={fasting}
+                onUpdateTracker={handleUpdateFasting}
+                expanded
+              />
+              <WaterCard
+                waterMl={waterMl}
+                targetMl={profile.targets.waterMl}
+                onUpdateWater={handleUpdateWater}
+              />
+            </>
+          ) : (
+            <>
+              <DailyCalorieCard
+                consumedCalories={totals.calories}
+                consumedProtein={totals.protein}
+                consumedCarbs={totals.carbs}
+                consumedFat={totals.fat}
+                targets={profile.targets}
+              />
 
-          {/* Meals Section */}
-          <MealSection
-            meals={meals}
-            onAddMeal={(type) => setScannerMealType(type)}
-            onDeleteFood={handleDeleteFood}
-          />
+              <MealSection
+                meals={meals}
+                onAddMeal={(type) => setScannerMealType(type)}
+                onDeleteMeal={handleDeleteFood}
+              />
 
-          {/* Water Intake Tracker */}
-          <WaterCard
-            currentMl={waterMl}
-            targetMl={profile.targets.waterMl}
-            onUpdateWater={handleUpdateWater}
-          />
+              <WaterCard
+                waterMl={waterMl}
+                targetMl={profile.targets.waterMl}
+                onUpdateWater={handleUpdateWater}
+              />
 
-          {/* Weight & Target Goal Card */}
-          <WeightCard
-            currentWeight={profile.currentWeightKg}
-            targetWeight={profile.targetWeightKg}
-            onUpdateWeight={handleUpdateWeight}
-          />
+              <FastingCard
+                tracker={fasting}
+                onUpdateTracker={handleUpdateFasting}
+              />
 
-          {/* Intermittent Fasting Tracker */}
-          <FastingCard
-            fasting={fasting}
-            onToggleFasting={handleToggleFasting}
-            onChangeProtocol={handleChangeFastingProtocol}
-          />
+              <WeightCard
+                currentWeightKg={profile.currentWeightKg}
+                targetWeightKg={profile.targetWeightKg}
+                heightCm={profile.heightCm}
+                history={weightHistory}
+                onLogWeight={handleLogWeight}
+              />
+            </>
+          )}
         </ScrollView>
 
-        {/* Bottom Action Tab Bar */}
-        <View style={styles.bottomTabBar}>
-          <TouchableOpacity
-            style={styles.tabItem}
-            onPress={() => setScannerMealType('lunch')}
-          >
-            <View style={styles.scanCircle}>
-              <Ionicons name="camera" size={22} color="#FFF" />
-            </View>
-            <Text style={styles.tabTextActive}>AI Yemek Tara</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.tabItem}
-            onPress={() => setIsCoachOpen(true)}
-          >
-            <Ionicons name="chatbubbles-outline" size={22} color={COLORS.nvidia} />
-            <Text style={[styles.tabText, { color: COLORS.nvidia }]}>AI Diyetisyen</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.tabItem}
-            onPress={() => setIsSettingsOpen(true)}
-          >
-            <Ionicons name="person-circle-outline" size={23} color={COLORS.textSecondary} />
-            <Text style={styles.tabText}>Profil & API</Text>
-          </TouchableOpacity>
-        </View>
-
         {/* AI Scanner Modal */}
-        {scannerMealType && (
-          <AiFoodScannerModal
-            visible={!!scannerMealType}
-            targetMealType={scannerMealType}
-            nvidiaApiKey={profile.nvidiaApiKey}
-            nvidiaTextModel={profile.nvidiaTextModel}
-            nvidiaVisionModel={profile.nvidiaVisionModel}
-            onClose={() => setScannerMealType(null)}
-            onOpenSettings={() => setIsSettingsOpen(true)}
-            onSaveFood={handleSaveFood}
-          />
-        )}
+        <AiFoodScannerModal
+          visible={!!scannerMealType}
+          targetMealType={scannerMealType || 'lunch'}
+          nvidiaApiKey={profile.nvidiaApiKey}
+          nvidiaTextModel={profile.nvidiaTextModel}
+          nvidiaVisionModel={profile.nvidiaVisionModel}
+          onClose={() => setScannerMealType(null)}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          onSaveFood={handleSaveFood}
+        />
 
         {/* AI Dietitian Coach Modal */}
         <AiCoachModal
@@ -351,44 +419,41 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
-  scrollContent: {
-    paddingBottom: 95,
-  },
-  bottomTabBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+  subBar: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#12131A',
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    paddingBottom: Platform.OS === 'ios' ? 20 : 12,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.cardBorder,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.surface,
   },
-  tabItem: {
+  greetingText: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 12,
+    color: COLORS.inkSecondary,
+  },
+  dateSwitcher: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
+    gap: 10,
   },
-  scanCircle: {
-    backgroundColor: COLORS.primary,
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    justifyContent: 'center',
-    alignItems: 'center',
+  dateStepBtn: {
+    paddingVertical: 2,
   },
-  tabText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
+  dateStepText: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 12,
+    color: COLORS.inkSecondary,
   },
-  tabTextActive: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: COLORS.primaryLight,
+  dateLabel: {
+    fontFamily: FONTS.monoSemiBold,
+    fontSize: 12,
+    color: COLORS.ink,
+    fontVariant: ['tabular-nums'],
+  },
+  scrollContent: {
+    paddingBottom: 36,
   },
 });

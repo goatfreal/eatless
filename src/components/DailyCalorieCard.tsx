@@ -1,223 +1,237 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../theme/colors';
-import { DailyTargets, FoodItem } from '../types/nutrition';
+import { COLORS, FONTS } from '../theme/colors';
+import { DailyTargets } from '../types/nutrition';
 
 interface DailyCalorieCardProps {
+  consumedCalories: number;
+  consumedProtein: number;
+  consumedCarbs: number;
+  consumedFat: number;
   targets: DailyTargets;
-  meals: FoodItem[];
 }
 
 export const DailyCalorieCard: React.FC<DailyCalorieCardProps> = ({
+  consumedCalories,
+  consumedProtein,
+  consumedCarbs,
+  consumedFat,
   targets,
-  meals,
 }) => {
-  // Sum up today's nutrition
-  const consumed = meals.reduce(
-    (acc, m) => {
-      acc.calories += m.calories;
-      acc.protein += m.protein;
-      acc.carbs += m.carbs;
-      acc.fat += m.fat;
-      return acc;
+  const remaining = targets.calories - consumedCalories;
+  const isOver = remaining < 0;
+  const progressRatio = Math.min(consumedCalories / Math.max(targets.calories, 1), 1);
+
+  const macros = [
+    {
+      label: 'Protein',
+      consumed: consumedProtein,
+      target: targets.protein,
+      color: COLORS.accent,
     },
-    { calories: 0, protein: 0, carbs: 0, fat: 0 }
-  );
-
-  const remainingCalories = Math.max(0, targets.calories - consumed.calories);
-  const caloriePercent = Math.min(100, Math.round((consumed.calories / targets.calories) * 100));
-
-  const proteinPercent = Math.min(100, Math.round((consumed.protein / targets.protein) * 100));
-  const carbsPercent = Math.min(100, Math.round((consumed.carbs / targets.carbs) * 100));
-  const fatPercent = Math.min(100, Math.round((consumed.fat / targets.fat) * 100));
+    {
+      label: 'Karbonhidrat',
+      consumed: consumedCarbs,
+      target: targets.carbs,
+      color: COLORS.ink,
+    },
+    {
+      label: 'Yağ',
+      consumed: consumedFat,
+      target: targets.fat,
+      color: COLORS.terracotta,
+    },
+  ];
 
   return (
-    <View style={styles.card}>
-      {/* Top Calorie Summary */}
-      <View style={styles.topRow}>
-        <View style={styles.calorieCol}>
-          <Text style={styles.calorieNumber}>{remainingCalories}</Text>
-          <Text style={styles.calorieLabel}>Kalan Kalori (kcal)</Text>
-        </View>
-
-        <View style={styles.targetCol}>
-          <View style={styles.targetItem}>
-            <Ionicons name="flag-outline" size={14} color={COLORS.textSecondary} />
-            <Text style={styles.targetItemText}>Hedef: {targets.calories}</Text>
-          </View>
-          <View style={styles.targetItem}>
-            <Ionicons name="restaurant-outline" size={14} color={COLORS.primary} />
-            <Text style={[styles.targetItemText, { color: COLORS.primaryLight }]}>
-              Alınan: {consumed.calories}
-            </Text>
-          </View>
-        </View>
+    <View style={styles.section}>
+      {/* Editorial Section Header */}
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>01. Günlük Enerji Bilançosu</Text>
+        <Text style={styles.sectionMeta}>
+          TDEE {targets.tdee} kcal · BMR {targets.bmr} kcal
+        </Text>
       </View>
 
-      {/* Main Calorie Progress Bar */}
-      <View style={styles.calorieBarTrack}>
-        <View
-          style={[
-            styles.calorieBarFill,
-            { width: `${caloriePercent}%` },
-            caloriePercent >= 100 && { backgroundColor: COLORS.danger },
-          ]}
-        />
-      </View>
-
-      {/* Macro Breakdown Rows (Protein, Carbs, Fat) */}
-      <View style={styles.macrosContainer}>
-        {/* Protein */}
-        <View style={styles.macroBox}>
-          <View style={styles.macroHeader}>
-            <Text style={[styles.macroName, { color: COLORS.protein }]}>Protein</Text>
-            <Text style={styles.macroValue}>
-              {consumed.protein} / {targets.protein}g
+      {/* Single-Elevation Container (No nested cards, 1px hairline border) */}
+      <View style={styles.container}>
+        <View style={styles.heroBlock}>
+          <View style={styles.heroHeaderRow}>
+            <Text style={styles.heroLabel}>
+              {isOver ? 'Hedef Aşımı' : 'Kalan Kalori Bütçesi'}
+            </Text>
+            <Text style={styles.inlineEquation}>
+              Hedef {targets.calories} · Alınan {consumedCalories} kcal
             </Text>
           </View>
-          <View style={styles.macroTrack}>
+
+          <View style={styles.heroNumberRow}>
+            <Text
+              style={[
+                styles.heroValue,
+                isOver && { color: COLORS.terracotta },
+              ]}
+            >
+              {Math.abs(remaining)}
+            </Text>
+            <Text style={styles.heroUnit}>kcal</Text>
+          </View>
+
+          {/* Clean Hairline Progress Track */}
+          <View style={styles.mainTrack}>
             <View
               style={[
-                styles.macroFill,
-                { width: `${proteinPercent}%`, backgroundColor: COLORS.protein },
+                styles.mainFill,
+                {
+                  width: `${Math.round(progressRatio * 100)}%`,
+                  backgroundColor: isOver ? COLORS.terracotta : COLORS.accent,
+                },
               ]}
             />
           </View>
         </View>
 
-        {/* Carbs */}
-        <View style={styles.macroBox}>
-          <View style={styles.macroHeader}>
-            <Text style={[styles.macroName, { color: COLORS.carbs }]}>Karbonhidrat</Text>
-            <Text style={styles.macroValue}>
-              {consumed.carbs} / {targets.carbs}g
-            </Text>
-          </View>
-          <View style={styles.macroTrack}>
-            <View
-              style={[
-                styles.macroFill,
-                { width: `${carbsPercent}%`, backgroundColor: COLORS.carbs },
-              ]}
-            />
-          </View>
-        </View>
-
-        {/* Fat */}
-        <View style={styles.macroBox}>
-          <View style={styles.macroHeader}>
-            <Text style={[styles.macroName, { color: COLORS.fat }]}>Yağ</Text>
-            <Text style={styles.macroValue}>
-              {consumed.fat} / {targets.fat}g
-            </Text>
-          </View>
-          <View style={styles.macroTrack}>
-            <View
-              style={[
-                styles.macroFill,
-                { width: `${fatPercent}%`, backgroundColor: COLORS.fat },
-              ]}
-            />
-          </View>
-        </View>
+        {/* Hairline Divided Macro Rows (No cards inside cards) */}
+        {macros.map((macro) => {
+          const ratio = Math.min(macro.consumed / Math.max(macro.target, 1), 1);
+          const pct = Math.round(ratio * 100);
+          return (
+            <View key={macro.label} style={styles.macroRow}>
+              <View style={styles.macroRowTop}>
+                <Text style={styles.macroName}>{macro.label}</Text>
+                <Text style={styles.macroNumbers}>
+                  {macro.consumed} / {macro.target} g · %{pct}
+                </Text>
+              </View>
+              <View style={styles.macroTrack}>
+                <View
+                  style={[
+                    styles.macroFill,
+                    {
+                      width: `${pct}%`,
+                      backgroundColor: macro.color,
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+          );
+        })}
       </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: COLORS.card,
-    marginHorizontal: 20,
-    marginTop: 8,
-    borderRadius: 24,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
+  section: {
+    marginHorizontal: 16,
+    marginTop: 18,
   },
-  topRow: {
+  sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
+    alignItems: 'baseline',
+    marginBottom: 8,
   },
-  calorieCol: {
-    flex: 1,
+  sectionTitle: {
+    fontFamily: FONTS.displayBold,
+    fontSize: 15,
+    color: COLORS.ink,
+    letterSpacing: -0.2,
   },
-  calorieNumber: {
-    fontSize: 40,
-    fontWeight: '900',
-    color: COLORS.text,
-    letterSpacing: -1,
+  sectionMeta: {
+    fontFamily: FONTS.mono,
+    fontSize: 11,
+    color: COLORS.inkMuted,
+    fontVariant: ['tabular-nums'],
   },
-  calorieLabel: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  targetCol: {
-    alignItems: 'flex-end',
-    gap: 6,
-  },
-  targetItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: COLORS.cardSecondary,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+  container: {
+    backgroundColor: COLORS.surface,
     borderRadius: 10,
-  },
-  targetItemText: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    fontWeight: '600',
-  },
-  calorieBarTrack: {
-    height: 10,
-    backgroundColor: COLORS.cardSecondary,
-    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: COLORS.border,
     overflow: 'hidden',
-    marginBottom: 20,
   },
-  calorieBarFill: {
-    height: '100%',
-    backgroundColor: COLORS.primary,
-    borderRadius: 5,
+  heroBlock: {
+    padding: 18,
   },
-  macrosContainer: {
-    gap: 12,
-    paddingTop: 4,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.cardBorder + '60',
-  },
-  macroBox: {
-    gap: 5,
-  },
-  macroHeader: {
+  heroHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'baseline',
+    marginBottom: 6,
+  },
+  heroLabel: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 13,
+    color: COLORS.inkSecondary,
+  },
+  inlineEquation: {
+    fontFamily: FONTS.mono,
+    fontSize: 11,
+    color: COLORS.inkMuted,
+    fontVariant: ['tabular-nums'],
+  },
+  heroNumberRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+    marginBottom: 14,
+  },
+  heroValue: {
+    fontFamily: FONTS.monoSemiBold,
+    fontSize: 42,
+    lineHeight: 48,
+    color: COLORS.ink,
+    letterSpacing: -1.2,
+    fontVariant: ['tabular-nums'],
+  },
+  heroUnit: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 15,
+    color: COLORS.inkMuted,
+  },
+  mainTrack: {
+    height: 6,
+    backgroundColor: COLORS.surfaceMuted,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  mainFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  macroRow: {
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  macroRowTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 6,
   },
   macroName: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 13,
+    color: COLORS.ink,
   },
-  macroValue: {
+  macroNumbers: {
+    fontFamily: FONTS.mono,
     fontSize: 12,
-    color: COLORS.textSecondary,
-    fontWeight: '600',
+    color: COLORS.inkSecondary,
+    fontVariant: ['tabular-nums'],
   },
   macroTrack: {
-    height: 6,
-    backgroundColor: COLORS.cardSecondary,
-    borderRadius: 3,
+    height: 4,
+    backgroundColor: COLORS.surfaceMuted,
+    borderRadius: 2,
     overflow: 'hidden',
   },
   macroFill: {
     height: '100%',
-    borderRadius: 3,
+    borderRadius: 2,
   },
 });

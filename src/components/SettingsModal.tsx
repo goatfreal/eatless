@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -11,10 +11,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../theme/colors';
+import { COLORS, FONTS } from '../theme/colors';
 import { UserProfile } from '../types/nutrition';
-import { testNvidiaApiKey } from '../services/nvidiaAiService';
+import { getDefaultNvidiaKey, testNvidiaApiKey } from '../services/nvidiaAiService';
 import { calculatePersonalTargets } from '../utils/calorieCalculator';
 
 interface SettingsModalProps {
@@ -33,16 +32,37 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onResetOnboarding,
 }) => {
   const [name, setName] = useState(profile.name);
-  const [apiKey, setApiKey] = useState(profile.nvidiaApiKey);
+  const [apiKey, setApiKey] = useState(profile.nvidiaApiKey || getDefaultNvidiaKey());
   const [showKey, setShowKey] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [testResult, setTestResult] = useState<{
+    ok: boolean;
+    message: string;
+  } | null>(null);
 
-  const [calorieTarget, setCalorieTarget] = useState(profile.targets.calories.toString());
-  const [proteinTarget, setProteinTarget] = useState(profile.targets.protein.toString());
-  const [carbsTarget, setCarbsTarget] = useState(profile.targets.carbs.toString());
+  const [calorieTarget, setCalorieTarget] = useState(
+    profile.targets.calories.toString()
+  );
+  const [proteinTarget, setProteinTarget] = useState(
+    profile.targets.protein.toString()
+  );
+  const [carbsTarget, setCarbsTarget] = useState(
+    profile.targets.carbs.toString()
+  );
   const [fatTarget, setFatTarget] = useState(profile.targets.fat.toString());
-  const [waterTarget, setWaterTarget] = useState(profile.targets.waterMl.toString());
+  const [waterTarget, setWaterTarget] = useState(
+    profile.targets.waterMl.toString()
+  );
+
+  useEffect(() => {
+    setName(profile.name);
+    setApiKey(profile.nvidiaApiKey || getDefaultNvidiaKey());
+    setCalorieTarget(profile.targets.calories.toString());
+    setProteinTarget(profile.targets.protein.toString());
+    setCarbsTarget(profile.targets.carbs.toString());
+    setFatTarget(profile.targets.fat.toString());
+    setWaterTarget(profile.targets.waterMl.toString());
+  }, [profile, visible]);
 
   const handleTest = async () => {
     setIsTesting(true);
@@ -72,7 +92,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     onSave({
       ...profile,
       name: name.trim() || profile.name,
-      nvidiaApiKey: apiKey.trim(),
+      nvidiaApiKey: (apiKey || getDefaultNvidiaKey()).trim(),
       targets: {
         ...profile.targets,
         calories: parseInt(calorieTarget, 10) || profile.targets.calories,
@@ -91,198 +111,195 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardContainer}
       >
-        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
-          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+        <View style={styles.overlay}>
+          <View style={styles.sheet}>
             {/* Header */}
             <View style={styles.header}>
-              <Text style={styles.title}>Profil & NVIDIA Ayarları</Text>
-              <TouchableOpacity onPress={onClose}>
-                <Ionicons name="close-circle" size={26} color={COLORS.textMuted} />
+              <View>
+                <Text style={styles.title}>Profil ve Sistem Ayarları</Text>
+                <Text style={styles.subtitle}>
+                  Yaş {profile.age} · {profile.heightCm} cm · {profile.currentWeightKg} kg
+                  · BMR {profile.targets.bmr} kcal
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={onClose}
+                activeOpacity={0.75}
+                style={styles.closeBtn}
+              >
+                <Text style={styles.closeBtnText}>Kapat</Text>
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Personal Info */}
-              <View style={styles.section}>
-                <View style={styles.sectionTitleRow}>
-                  <Ionicons name="person-outline" size={18} color={COLORS.primary} />
-                  <Text style={styles.sectionTitle}>Kişisel Profil</Text>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.scrollBody}
+            >
+              {/* Section 01: Personal Identity */}
+              <Text style={styles.sectionHeading}>01. Kişisel Bilgiler</Text>
+              <View style={styles.surfaceGroup}>
+                <View style={styles.fieldRow}>
+                  <Text style={styles.fieldLabel}>Kullanıcı Adı</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    value={name}
+                    onChangeText={setName}
+                    placeholder="Adınız"
+                    placeholderTextColor={COLORS.inkMuted}
+                  />
                 </View>
 
-                <Text style={styles.fieldLabel}>İsminiz</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={name}
-                  onChangeText={setName}
-                  placeholder="İsminiz"
-                  placeholderTextColor={COLORS.textMuted}
-                />
-
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoChip}>Yaş: {profile.age}</Text>
-                  <Text style={styles.infoChip}>Boy: {profile.heightCm} cm</Text>
-                  <Text style={styles.infoChip}>Kilo: {profile.currentWeightKg} kg</Text>
-                  <Text style={styles.infoChip}>BMR: {profile.targets.bmr} kcal</Text>
+                <View style={[styles.fieldRow, styles.hairlineTop]}>
+                  <TouchableOpacity
+                    onPress={onResetOnboarding}
+                    activeOpacity={0.75}
+                    style={styles.secondaryActionBtn}
+                  >
+                    <Text style={styles.secondaryActionText}>
+                      Kurulum Sihirbazını Yeniden Çalıştır
+                    </Text>
+                  </TouchableOpacity>
                 </View>
-
-                <TouchableOpacity style={styles.reOnboardBtn} onPress={onResetOnboarding}>
-                  <Ionicons name="refresh-outline" size={16} color={COLORS.primaryLight} />
-                  <Text style={styles.reOnboardText}>
-                    Kurulum Sihirbazını Baştan Çalıştır (Boy/Yaş/Hedef Değiştir)
-                  </Text>
-                </TouchableOpacity>
               </View>
 
-              {/* NVIDIA API Key Section */}
-              <View style={styles.section}>
-                <View style={styles.sectionTitleRow}>
-                  <Ionicons name="hardware-chip-outline" size={18} color={COLORS.nvidia} />
-                  <Text style={styles.sectionTitle}>NVIDIA NIM API Bağlantısı</Text>
-                </View>
-                <Text style={styles.sectionSubtitle}>
-                  Llama-3.2 Vision (Fotoğraf) ve Llama-3.1 70B (Metin/Koç) modelleri için nvapi-... anahtarınız:
-                </Text>
+              {/* Section 02: NVIDIA API Configuration */}
+              <Text style={styles.sectionHeading}>02. NVIDIA NIM API Yapılandırması</Text>
+              <View style={styles.surfaceGroup}>
+                <View style={styles.fieldRow}>
+                  <View style={styles.labelBetween}>
+                    <Text style={styles.fieldLabel}>API Anahtarı (nvapi-...)</Text>
+                    <TouchableOpacity onPress={() => setShowKey(!showKey)}>
+                      <Text style={styles.toggleLink}>
+                        {showKey ? 'Gizle' : 'Göster'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
 
-                <View style={styles.inputRow}>
                   <TextInput
-                    style={styles.keyInput}
+                    style={styles.monoInput}
                     placeholder="nvapi-..."
-                    placeholderTextColor={COLORS.textMuted}
+                    placeholderTextColor={COLORS.inkMuted}
                     value={apiKey}
                     onChangeText={setApiKey}
                     secureTextEntry={!showKey}
                     autoCapitalize="none"
                     autoCorrect={false}
                   />
-                  <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowKey(!showKey)}>
-                    <Ionicons
-                      name={showKey ? 'eye-off-outline' : 'eye-outline'}
-                      size={18}
-                      color={COLORS.textSecondary}
-                    />
-                  </TouchableOpacity>
                 </View>
 
-                <TouchableOpacity
-                  style={[styles.testBtn, !apiKey.trim() && { opacity: 0.5 }]}
-                  onPress={handleTest}
-                  disabled={!apiKey.trim() || isTesting}
-                >
-                  {isTesting ? (
-                    <ActivityIndicator size="small" color="#FFF" />
-                  ) : (
-                    <>
-                      <Ionicons name="flash" size={15} color="#FFF" />
-                      <Text style={styles.testBtnText}>NVIDIA Bağlantısını Test Et</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-
-                {testResult && (
-                  <View
-                    style={[
-                      styles.testBox,
-                      { borderColor: testResult.ok ? COLORS.nvidia : COLORS.danger },
-                    ]}
+                <View style={[styles.fieldRow, styles.hairlineTop]}>
+                  <TouchableOpacity
+                    style={[styles.testBtn, isTesting && { opacity: 0.7 }]}
+                    onPress={handleTest}
+                    disabled={isTesting}
+                    activeOpacity={0.8}
                   >
+                    {isTesting ? (
+                      <ActivityIndicator size="small" color={COLORS.surface} />
+                    ) : (
+                      <Text style={styles.testBtnText}>Test Et</Text>
+                    )}
+                  </TouchableOpacity>
+
+                  {testResult && (
                     <Text
-                      style={{
-                        color: testResult.ok ? '#D1E7A3' : '#FCA5A5',
-                        fontSize: 12,
-                        fontWeight: '600',
-                      }}
+                      style={[
+                        styles.testResultText,
+                        {
+                          color: testResult.ok ? COLORS.accent : COLORS.danger,
+                        },
+                      ]}
                     >
                       {testResult.message}
                     </Text>
-                  </View>
-                )}
-              </View>
-
-              {/* Daily Nutrition Targets */}
-              <View style={styles.section}>
-                <View style={styles.headerBetween}>
-                  <View style={styles.sectionTitleRow}>
-                    <Ionicons name="flame-outline" size={18} color={COLORS.primary} />
-                    <Text style={styles.sectionTitle}>Günlük Hedefler</Text>
-                  </View>
-                  <TouchableOpacity onPress={handleRecalculateAuto}>
-                    <Text style={styles.autoCalcLink}>Otomatik Hesapla</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.targetGrid}>
-                  <View style={styles.targetField}>
-                    <Text style={styles.fieldLabel}>Kalori (kcal)</Text>
-                    <TextInput
-                      style={styles.numberInput}
-                      keyboardType="numeric"
-                      value={calorieTarget}
-                      onChangeText={setCalorieTarget}
-                    />
-                  </View>
-
-                  <View style={styles.targetField}>
-                    <Text style={[styles.fieldLabel, { color: COLORS.protein }]}>Protein (g)</Text>
-                    <TextInput
-                      style={styles.numberInput}
-                      keyboardType="numeric"
-                      value={proteinTarget}
-                      onChangeText={setProteinTarget}
-                    />
-                  </View>
-
-                  <View style={styles.targetField}>
-                    <Text style={[styles.fieldLabel, { color: COLORS.carbs }]}>Karb (g)</Text>
-                    <TextInput
-                      style={styles.numberInput}
-                      keyboardType="numeric"
-                      value={carbsTarget}
-                      onChangeText={setCarbsTarget}
-                    />
-                  </View>
-
-                  <View style={styles.targetField}>
-                    <Text style={[styles.fieldLabel, { color: COLORS.fat }]}>Yağ (g)</Text>
-                    <TextInput
-                      style={styles.numberInput}
-                      keyboardType="numeric"
-                      value={fatTarget}
-                      onChangeText={setFatTarget}
-                    />
-                  </View>
-
-                  <View style={[styles.targetField, { width: '100%' }]}>
-                    <Text style={[styles.fieldLabel, { color: COLORS.water }]}>Günlük Su (ml)</Text>
-                    <TextInput
-                      style={styles.numberInput}
-                      keyboardType="numeric"
-                      value={waterTarget}
-                      onChangeText={setWaterTarget}
-                    />
-                  </View>
+                  )}
                 </View>
               </View>
 
-              {/* 7-Day Sideload Auto-Refresh Guide */}
-              <View style={[styles.section, styles.refreshGuideSection]}>
-                <View style={styles.sectionTitleRow}>
-                  <Ionicons name="wifi" size={18} color="#38BDF8" />
-                  <Text style={[styles.sectionTitle, { color: '#38BDF8' }]}>
-                    7 Günlük Sideload Otomatik Yenileme
+              {/* Section 03: Daily Targets */}
+              <View style={styles.headingBetween}>
+                <Text style={styles.sectionHeading}>03. Günlük Enerji ve Makro Bütçesi</Text>
+                <TouchableOpacity onPress={handleRecalculateAuto}>
+                  <Text style={styles.toggleLink}>Mifflin-St Jeor İle Sıfırla</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.surfaceGroup}>
+                <View style={styles.inlineInputRow}>
+                  <Text style={styles.inlineInputLabel}>Günlük Kalori (kcal)</Text>
+                  <TextInput
+                    style={styles.inlineMonoInput}
+                    keyboardType="numeric"
+                    value={calorieTarget}
+                    onChangeText={setCalorieTarget}
+                  />
+                </View>
+
+                <View style={[styles.inlineInputRow, styles.hairlineTop]}>
+                  <Text style={styles.inlineInputLabel}>Protein Hedefi (g)</Text>
+                  <TextInput
+                    style={styles.inlineMonoInput}
+                    keyboardType="numeric"
+                    value={proteinTarget}
+                    onChangeText={setProteinTarget}
+                  />
+                </View>
+
+                <View style={[styles.inlineInputRow, styles.hairlineTop]}>
+                  <Text style={styles.inlineInputLabel}>Karbonhidrat Hedefi (g)</Text>
+                  <TextInput
+                    style={styles.inlineMonoInput}
+                    keyboardType="numeric"
+                    value={carbsTarget}
+                    onChangeText={setCarbsTarget}
+                  />
+                </View>
+
+                <View style={[styles.inlineInputRow, styles.hairlineTop]}>
+                  <Text style={styles.inlineInputLabel}>Yağ Hedefi (g)</Text>
+                  <TextInput
+                    style={styles.inlineMonoInput}
+                    keyboardType="numeric"
+                    value={fatTarget}
+                    onChangeText={setFatTarget}
+                  />
+                </View>
+
+                <View style={[styles.inlineInputRow, styles.hairlineTop]}>
+                  <Text style={styles.inlineInputLabel}>Su Hedefi (ml)</Text>
+                  <TextInput
+                    style={styles.inlineMonoInput}
+                    keyboardType="numeric"
+                    value={waterTarget}
+                    onChangeText={setWaterTarget}
+                  />
+                </View>
+              </View>
+
+              {/* Section 04: Sideloadly Auto-Refresh */}
+              <Text style={styles.sectionHeading}>04. iOS 7 Günlük İmza Yenileme</Text>
+              <View style={styles.surfaceGroup}>
+                <View style={styles.fieldRow}>
+                  <Text style={styles.guideBody}>
+                    Sideloadly üzerinden kurulum yaparken Wi-Fi Auto-Refresh seçeneğini
+                    aktif bıraktığınızda, bilgisayarınız ve telefonunuz aynı yerel ağda
+                    olduğu sürece 7 günlük sertifika süresi dolmadan arka planda otomatik
+                    yenilenir ve verileriniz korunur.
                   </Text>
                 </View>
-                <Text style={styles.guideText}>
-                  Sideloadly'de telefonunuz bağlıyken sağ alttaki "Wi-Fi" seçeneğini işaretleyin. Bilgisayarınız ve telefonunuz aynı Wi-Fi ağındayken kablo takmadan her hafta arka planda otomatik yenilenir ve uygulama hiç kapanmaz.
-                </Text>
               </View>
 
-              <TouchableOpacity style={styles.saveBtn} onPress={handleSaveAll}>
-                <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
-                <Text style={styles.saveBtnText}>Değişiklikleri Kaydet</Text>
+              <TouchableOpacity
+                style={styles.saveAllBtn}
+                onPress={handleSaveAll}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.saveAllBtnText}>Ayarları Kaydet</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
-        </TouchableOpacity>
+        </View>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -292,128 +309,196 @@ const styles = StyleSheet.create({
   keyboardContainer: { flex: 1 },
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.82)',
+    backgroundColor: 'rgba(28, 25, 23, 0.45)',
     justifyContent: 'flex-end',
   },
-  modalContent: {
-    backgroundColor: COLORS.card,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: 20,
+  sheet: {
+    backgroundColor: COLORS.background,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
     maxHeight: '92%',
     borderTopWidth: 1,
-    borderColor: COLORS.cardBorder,
+    borderColor: COLORS.border,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.surface,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
   },
-  title: { fontSize: 19, fontWeight: '800', color: COLORS.text },
-  section: {
-    marginBottom: 16,
-    backgroundColor: COLORS.cardSecondary,
-    padding: 16,
-    borderRadius: 18,
+  title: {
+    fontFamily: FONTS.displayBold,
+    fontSize: 17,
+    color: COLORS.ink,
+  },
+  subtitle: {
+    fontFamily: FONTS.mono,
+    fontSize: 11,
+    color: COLORS.inkMuted,
+    marginTop: 2,
+    fontVariant: ['tabular-nums'],
+  },
+  closeBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: COLORS.cardBorder,
+    borderColor: COLORS.borderStrong,
+    backgroundColor: COLORS.background,
   },
-  headerBetween: {
+  closeBtnText: {
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 12,
+    color: COLORS.ink,
+  },
+  scrollBody: {
+    padding: 20,
+    paddingBottom: 38,
+  },
+  sectionHeading: {
+    fontFamily: FONTS.displayBold,
+    fontSize: 14,
+    color: COLORS.ink,
+    marginTop: 14,
+    marginBottom: 8,
+  },
+  headingBetween: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+  },
+  surfaceGroup: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  fieldRow: {
+    padding: 15,
+  },
+  hairlineTop: {
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  labelBetween: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 8,
+  },
+  fieldLabel: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 12,
+    color: COLORS.inkSecondary,
+    marginBottom: 6,
+  },
+  toggleLink: {
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 12,
+    color: COLORS.accent,
+  },
+  textInput: {
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.borderStrong,
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 14,
+    color: COLORS.ink,
+  },
+  monoInput: {
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.borderStrong,
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontFamily: FONTS.mono,
+    fontSize: 12,
+    color: COLORS.ink,
+  },
+  secondaryActionBtn: {
+    paddingVertical: 10,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: COLORS.borderStrong,
+    backgroundColor: COLORS.background,
+    alignItems: 'center',
+  },
+  secondaryActionText: {
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 12,
+    color: COLORS.ink,
+  },
+  testBtn: {
+    backgroundColor: COLORS.ink,
+    paddingVertical: 11,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  testBtnText: {
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 13,
+    color: COLORS.surface,
+  },
+  testResultText: {
+    fontFamily: FONTS.mono,
+    fontSize: 11,
+    marginTop: 10,
+    lineHeight: 17,
+  },
+  inlineInputRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
-  },
-  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text },
-  sectionSubtitle: { fontSize: 12, color: COLORS.textSecondary, marginBottom: 10, lineHeight: 16 },
-  autoCalcLink: { color: COLORS.primaryLight, fontSize: 12, fontWeight: '700' },
-  textInput: {
-    backgroundColor: COLORS.card,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: COLORS.text,
-    fontSize: 15,
-    fontWeight: '700',
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-    marginBottom: 10,
-  },
-  infoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 },
-  infoChip: {
-    backgroundColor: COLORS.card,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    color: COLORS.textSecondary,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  reOnboardBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 8,
-  },
-  reOnboardText: { color: COLORS.primaryLight, fontSize: 12, fontWeight: '700' },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-  },
-  keyInput: {
-    flex: 1,
-    color: COLORS.text,
-    fontSize: 13,
-    paddingHorizontal: 12,
+    paddingHorizontal: 15,
     paddingVertical: 11,
   },
-  eyeBtn: { paddingHorizontal: 12 },
-  testBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: COLORS.nvidia,
-    paddingVertical: 10,
-    borderRadius: 12,
-    marginTop: 10,
+  inlineInputLabel: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 13,
+    color: COLORS.ink,
   },
-  testBtnText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
-  testBox: {
-    marginTop: 10,
-    padding: 10,
-    borderRadius: 10,
-    backgroundColor: COLORS.card,
+  inlineMonoInput: {
+    width: 96,
+    height: 36,
+    backgroundColor: COLORS.background,
     borderWidth: 1,
+    borderColor: COLORS.borderStrong,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    textAlign: 'right',
+    fontFamily: FONTS.monoSemiBold,
+    fontSize: 14,
+    color: COLORS.ink,
+    fontVariant: ['tabular-nums'],
   },
-  targetGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  targetField: {
-    width: '48%',
-    backgroundColor: COLORS.card,
-    padding: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
+  guideBody: {
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    color: COLORS.inkSecondary,
+    lineHeight: 19,
   },
-  fieldLabel: { fontSize: 11, color: COLORS.textSecondary, fontWeight: '700', marginBottom: 4 },
-  numberInput: { color: COLORS.text, fontSize: 16, fontWeight: '800', padding: 0 },
-  refreshGuideSection: { backgroundColor: '#0F1E2E', borderColor: '#1D3B5C' },
-  guideText: { color: '#93C5FD', fontSize: 12, lineHeight: 17 },
-  saveBtn: {
-    backgroundColor: COLORS.primary,
-    flexDirection: 'row',
-    justifyContent: 'center',
+  saveAllBtn: {
+    backgroundColor: COLORS.accent,
+    paddingVertical: 14,
+    borderRadius: 6,
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 15,
-    borderRadius: 16,
-    marginBottom: 20,
+    marginTop: 14,
   },
-  saveBtnText: { color: '#FFF', fontSize: 15, fontWeight: '800' },
+  saveAllBtnText: {
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 14,
+    color: COLORS.surface,
+  },
 });

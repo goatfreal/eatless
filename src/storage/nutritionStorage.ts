@@ -1,10 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FastingTracker, FoodItem, UserProfile, WeightEntry } from '../types/nutrition';
 import { calculatePersonalTargets } from '../utils/calorieCalculator';
+import { getDefaultNvidiaKey } from '../services/nvidiaAiService';
 
-const PROFILE_KEY = '@eatless_user_profile_v2';
-const FASTING_KEY = '@eatless_fasting_v2';
-const WEIGHT_HISTORY_KEY = '@eatless_weight_history_v2';
+const PROFILE_KEY = '@eatless_user_profile_v3';
+const FASTING_KEY = '@eatless_fasting_v3';
+const WEIGHT_HISTORY_KEY = '@eatless_weight_history_v3';
 
 export const INITIAL_PROFILE: UserProfile = {
   isOnboarded: false,
@@ -16,8 +17,8 @@ export const INITIAL_PROFILE: UserProfile = {
   targetWeightKg: 70,
   activityLevel: 'moderate',
   goalType: 'lose',
-  nvidiaApiKey: '',
-  nvidiaTextModel: 'google/gemma-3-12b-it',
+  nvidiaApiKey: getDefaultNvidiaKey(),
+  nvidiaTextModel: 'nvidia/nemotron-3.5-lightning-30b-a3b',
   nvidiaVisionModel: 'nvidia/nemotron-3.5-super-vl-120b-a12b',
   targets: calculatePersonalTargets('male', 24, 178, 75, 'moderate', 'lose'),
 };
@@ -26,7 +27,14 @@ export async function loadUserProfile(): Promise<UserProfile> {
   try {
     const raw = await AsyncStorage.getItem(PROFILE_KEY);
     if (!raw) return INITIAL_PROFILE;
-    return { ...INITIAL_PROFILE, ...JSON.parse(raw) };
+    const parsed = JSON.parse(raw);
+    return {
+      ...INITIAL_PROFILE,
+      ...parsed,
+      nvidiaApiKey: parsed.nvidiaApiKey || getDefaultNvidiaKey(),
+      nvidiaTextModel: 'nvidia/nemotron-3.5-lightning-30b-a3b',
+      nvidiaVisionModel: 'nvidia/nemotron-3.5-super-vl-120b-a12b',
+    };
   } catch {
     return INITIAL_PROFILE;
   }
@@ -41,7 +49,7 @@ export async function saveUserProfile(profile: UserProfile): Promise<void> {
 }
 
 export async function loadDailyMeals(dateStr: string): Promise<FoodItem[]> {
-  const key = `@eatless_meals_v2_${dateStr}`;
+  const key = `@eatless_meals_v3_${dateStr}`;
   try {
     const raw = await AsyncStorage.getItem(key);
     return raw ? JSON.parse(raw) : [];
@@ -51,7 +59,7 @@ export async function loadDailyMeals(dateStr: string): Promise<FoodItem[]> {
 }
 
 export async function saveDailyMeals(dateStr: string, meals: FoodItem[]): Promise<void> {
-  const key = `@eatless_meals_v2_${dateStr}`;
+  const key = `@eatless_meals_v3_${dateStr}`;
   try {
     await AsyncStorage.setItem(key, JSON.stringify(meals));
   } catch (error) {
@@ -60,7 +68,7 @@ export async function saveDailyMeals(dateStr: string, meals: FoodItem[]): Promis
 }
 
 export async function loadWaterIntake(dateStr: string): Promise<number> {
-  const key = `@eatless_water_v2_${dateStr}`;
+  const key = `@eatless_water_v3_${dateStr}`;
   try {
     const raw = await AsyncStorage.getItem(key);
     return raw ? parseInt(raw, 10) : 0;
@@ -70,7 +78,7 @@ export async function loadWaterIntake(dateStr: string): Promise<number> {
 }
 
 export async function saveWaterIntake(dateStr: string, ml: number): Promise<void> {
-  const key = `@eatless_water_v2_${dateStr}`;
+  const key = `@eatless_water_v3_${dateStr}`;
   try {
     await AsyncStorage.setItem(key, ml.toString());
   } catch (error) {

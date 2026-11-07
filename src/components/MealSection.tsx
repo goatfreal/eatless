@@ -1,217 +1,212 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../theme/colors';
+import { COLORS, FONTS } from '../theme/colors';
 import { FoodItem, MealType } from '../types/nutrition';
 
 interface MealSectionProps {
   meals: FoodItem[];
   onAddMeal: (mealType: MealType) => void;
-  onDeleteFood: (foodId: string) => void;
+  onDeleteMeal: (id: string) => void;
 }
 
-const SECTIONS: { type: MealType; title: string; icon: keyof typeof Ionicons.glyphMap; color: string }[] = [
-  { type: 'breakfast', title: 'Kahvaltı', icon: 'sunny-outline', color: '#F59E0B' },
-  { type: 'lunch', title: 'Öğle Yemeği', icon: 'restaurant-outline', color: '#10B981' },
-  { type: 'dinner', title: 'Akşam Yemeği', icon: 'moon-outline', color: '#6366F1' },
-  { type: 'snack', title: 'Atıştırmalık', icon: 'nutrition-outline', color: '#EC4899' },
+const MEAL_GROUPS: { type: MealType; title: string; targetPct: string }[] = [
+  { type: 'breakfast', title: 'Kahvaltı', targetPct: 'Önerilen %25' },
+  { type: 'lunch', title: 'Öğle Yemeği', targetPct: 'Önerilen %35' },
+  { type: 'dinner', title: 'Akşam Yemeği', targetPct: 'Önerilen %30' },
+  { type: 'snack', title: 'Ara Öğün', targetPct: 'Önerilen %10' },
 ];
 
 export const MealSection: React.FC<MealSectionProps> = ({
   meals,
   onAddMeal,
-  onDeleteFood,
+  onDeleteMeal,
 }) => {
   return (
-    <View style={styles.container}>
-      <Text style={styles.sectionHeader}>Öğünler</Text>
+    <View style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>02. Öğün Kayıtları</Text>
+        <Text style={styles.sectionMeta}>{meals.length} kayıt</Text>
+      </View>
 
-      {SECTIONS.map((sec) => {
-        const sectionMeals = meals.filter((m) => m.mealType === sec.type);
-        const sectionCalories = sectionMeals.reduce((sum, item) => sum + item.calories, 0);
+      {/* Single-elevation container with 1px hairline dividers */}
+      <View style={styles.container}>
+        {MEAL_GROUPS.map((group, idx) => {
+          const groupItems = meals.filter((m) => m.mealType === group.type);
+          const groupKcal = groupItems.reduce((sum, item) => sum + item.calories, 0);
 
-        return (
-          <View key={sec.type} style={styles.mealCard}>
-            {/* Meal Header */}
-            <View style={styles.headerRow}>
-              <View style={styles.titleGroup}>
-                <View style={[styles.iconCircle, { backgroundColor: sec.color + '20' }]}>
-                  <Ionicons name={sec.icon} size={18} color={sec.color} />
-                </View>
-                <View>
-                  <Text style={styles.mealTitle}>{sec.title}</Text>
-                  <Text style={styles.mealKcal}>
-                    {sectionCalories > 0 ? `${sectionCalories} kcal` : 'Henüz kaydedilmedi'}
+          return (
+            <View
+              key={group.type}
+              style={[styles.groupBlock, idx > 0 && styles.groupDivider]}
+            >
+              <View style={styles.groupHeader}>
+                <View style={styles.groupTitleBlock}>
+                  <Text style={styles.groupTitle}>{group.title}</Text>
+                  <Text style={styles.groupSubtitle}>
+                    {groupKcal > 0
+                      ? `${groupKcal} kcal · ${groupItems.length} besin`
+                      : group.targetPct}
                   </Text>
                 </View>
+
+                <TouchableOpacity
+                  onPress={() => onAddMeal(group.type)}
+                  activeOpacity={0.75}
+                  style={styles.addBtn}
+                >
+                  <Text style={styles.addBtnText}>+ Ekle</Text>
+                </TouchableOpacity>
               </View>
 
-              <TouchableOpacity
-                style={styles.addBtn}
-                onPress={() => onAddMeal(sec.type)}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="sparkles" size={14} color={COLORS.primary} />
-                <Text style={styles.addBtnText}>+ Ekle</Text>
-              </TouchableOpacity>
-            </View>
+              {groupItems.length > 0 && (
+                <View style={styles.itemsList}>
+                  {groupItems.map((item) => (
+                    <View key={item.id} style={styles.foodRow}>
+                      <View style={styles.foodInfo}>
+                        <Text style={styles.foodName}>{item.name}</Text>
+                        {/* Zero-pill quiet inline metadata separated by middot and slash */}
+                        <Text style={styles.foodMeta}>
+                          {item.portion} · {item.calories} kcal · {item.protein}g P /{' '}
+                          {item.carbs}g K / {item.fat}g Y
+                        </Text>
+                        {item.aiTip ? (
+                          <Text style={styles.foodNote}>{item.aiTip}</Text>
+                        ) : null}
+                      </View>
 
-            {/* List of food items */}
-            {sectionMeals.length > 0 && (
-              <View style={styles.itemsList}>
-                {sectionMeals.map((item) => (
-                  <View key={item.id} style={styles.foodRow}>
-                    <View style={styles.foodMain}>
-                      <Text style={styles.foodName}>{item.name}</Text>
-                      <Text style={styles.foodMacros}>
-                        {item.portion} • P: {item.protein}g • K: {item.carbs}g • Y: {item.fat}g
-                      </Text>
-                      {item.aiTip ? (
-                        <View style={styles.aiTipRow}>
-                          <Ionicons name="bulb-outline" size={11} color={COLORS.primaryLight} />
-                          <Text style={styles.aiTipText}>{item.aiTip}</Text>
-                        </View>
-                      ) : null}
-                    </View>
-
-                    <View style={styles.foodRight}>
-                      <Text style={styles.foodCal}>{item.calories} kcal</Text>
                       <TouchableOpacity
-                        style={styles.deleteBtn}
-                        onPress={() => onDeleteFood(item.id)}
+                        onPress={() => onDeleteMeal(item.id)}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        style={styles.deleteBtn}
                       >
-                        <Ionicons name="trash-outline" size={15} color={COLORS.textMuted} />
+                        <Text style={styles.deleteText}>Sil</Text>
                       </TouchableOpacity>
                     </View>
-                  </View>
-                ))}
-              </View>
-            )}
-          </View>
-        );
-      })}
+                  ))}
+                </View>
+              )}
+            </View>
+          );
+        })}
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: 20,
-    marginTop: 20,
+  section: {
+    marginHorizontal: 16,
+    marginTop: 22,
   },
   sectionHeader: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: COLORS.text,
-    marginBottom: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 8,
   },
-  mealCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 12,
+  sectionTitle: {
+    fontFamily: FONTS.displayBold,
+    fontSize: 15,
+    color: COLORS.ink,
+    letterSpacing: -0.2,
+  },
+  sectionMeta: {
+    fontFamily: FONTS.mono,
+    fontSize: 11,
+    color: COLORS.inkMuted,
+    fontVariant: ['tabular-nums'],
+  },
+  container: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: COLORS.cardBorder,
+    borderColor: COLORS.border,
+    overflow: 'hidden',
   },
-  headerRow: {
+  groupBlock: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  groupDivider: {
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  groupHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  titleGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  groupTitleBlock: {
+    flex: 1,
+    marginRight: 12,
   },
-  iconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
+  groupTitle: {
+    fontFamily: FONTS.display,
+    fontSize: 15,
+    color: COLORS.ink,
+    marginBottom: 2,
   },
-  mealTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  mealKcal: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 2,
+  groupSubtitle: {
+    fontFamily: FONTS.mono,
+    fontSize: 11,
+    color: COLORS.inkMuted,
+    fontVariant: ['tabular-nums'],
   },
   addBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: COLORS.cardSecondary,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 12,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: COLORS.cardBorder,
+    borderColor: COLORS.borderStrong,
+    backgroundColor: COLORS.background,
   },
   addBtnText: {
-    color: COLORS.primaryLight,
+    fontFamily: FONTS.bodySemiBold,
     fontSize: 12,
-    fontWeight: '700',
+    color: COLORS.ink,
   },
   itemsList: {
-    marginTop: 14,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.cardBorder + '60',
-    gap: 10,
+    marginTop: 10,
   },
   foodRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    backgroundColor: COLORS.cardSecondary + '60',
-    padding: 10,
-    borderRadius: 12,
+    paddingTop: 10,
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.surfaceMuted,
   },
-  foodMain: {
+  foodInfo: {
     flex: 1,
-    marginRight: 10,
+    marginRight: 12,
   },
   foodName: {
-    color: COLORS.text,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  foodMacros: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
-    marginTop: 3,
-  },
-  aiTipRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
-    backgroundColor: COLORS.primaryGlow,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    alignSelf: 'flex-start',
-  },
-  aiTipText: {
-    color: COLORS.primaryLight,
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  foodRight: {
-    alignItems: 'flex-end',
-    gap: 6,
-  },
-  foodCal: {
-    color: COLORS.text,
+    fontFamily: FONTS.bodySemiBold,
     fontSize: 13,
-    fontWeight: '700',
+    color: COLORS.ink,
+    marginBottom: 3,
+  },
+  foodMeta: {
+    fontFamily: FONTS.mono,
+    fontSize: 11,
+    color: COLORS.inkSecondary,
+    fontVariant: ['tabular-nums'],
+  },
+  foodNote: {
+    fontFamily: FONTS.body,
+    fontSize: 11,
+    color: COLORS.inkMuted,
+    marginTop: 4,
+    lineHeight: 16,
   },
   deleteBtn: {
-    padding: 2,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+  },
+  deleteText: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 11,
+    color: COLORS.danger,
   },
 });

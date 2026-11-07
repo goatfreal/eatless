@@ -1,148 +1,155 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../theme/colors';
+import { COLORS, FONTS } from '../theme/colors';
+import { ActiveTab } from '../types/nutrition';
 
 interface HeaderProps {
-  userName: string;
-  hasNvidiaKey: boolean;
-  selectedDate: string;
-  onChangeDate: (offsetDays: number) => void;
-  onOpenProfile: () => void;
+  activeTab: ActiveTab;
+  onSelectTab: (tab: ActiveTab) => void;
+  onOpenSettings: () => void;
 }
 
+const NAV_LINKS: { key: ActiveTab; label: string }[] = [
+  { key: 'home', label: 'Günlük' },
+  { key: 'scanner', label: 'Tarayıcı' },
+  { key: 'fasting', label: 'Oruç' },
+  { key: 'coach', label: 'Koç' },
+];
+
 export const Header: React.FC<HeaderProps> = ({
-  userName,
-  hasNvidiaKey,
-  selectedDate,
-  onChangeDate,
-  onOpenProfile,
+  activeTab,
+  onSelectTab,
+  onOpenSettings,
 }) => {
-  const todayStr = new Date().toISOString().split('T')[0];
-  const isToday = selectedDate === todayStr;
-
-  const formattedDate = isToday
-    ? 'Bugün'
-    : new Date(selectedDate).toLocaleDateString('tr-TR', {
-        day: 'numeric',
-        month: 'short',
-        weekday: 'short',
-      });
-
   return (
-    <View style={styles.container}>
-      <View style={styles.topRow}>
-        <View style={styles.leftCol}>
-          <View style={styles.brandRow}>
-            <Text style={styles.greeting}>Merhaba, {userName}</Text>
+    <View style={styles.bar}>
+      {/* Zone 1: Single-line Brand Wordmark */}
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={() => onSelectTab('home')}
+        style={styles.zoneBrand}
+      >
+        <Text style={styles.brandWordmark} numberOfLines={1}>
+          Eatless
+        </Text>
+      </TouchableOpacity>
+
+      {/* Zone 2: Concise Text Navigation Links */}
+      <View style={styles.zoneNav}>
+        {NAV_LINKS.map((item) => {
+          const isActive = activeTab === item.key;
+          return (
             <TouchableOpacity
-              style={[
-                styles.aiPill,
-                { borderColor: hasNvidiaKey ? COLORS.nvidia : COLORS.danger },
-              ]}
-              onPress={onOpenProfile}
+              key={item.key}
+              onPress={() => onSelectTab(item.key)}
+              activeOpacity={0.7}
+              style={styles.navItem}
             >
-              <Ionicons
-                name={hasNvidiaKey ? 'checkmark-circle' : 'warning-outline'}
-                size={12}
-                color={hasNvidiaKey ? COLORS.nvidia : COLORS.danger}
-              />
               <Text
                 style={[
-                  styles.aiPillText,
-                  { color: hasNvidiaKey ? COLORS.nvidia : COLORS.danger },
+                  styles.navText,
+                  isActive && styles.navTextActive,
                 ]}
+                numberOfLines={1}
               >
-                {hasNvidiaKey ? 'NVIDIA AI Aktif' : 'API Key Gir'}
+                {item.label}
               </Text>
+              {isActive && <View style={styles.activeIndicator} />}
             </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Date Selector Pill */}
-        <View style={styles.dateSelector}>
-          <TouchableOpacity
-            onPress={() => onChangeDate(-1)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name="chevron-back" size={16} color={COLORS.textSecondary} />
-          </TouchableOpacity>
-
-          <Text style={styles.dateLabel}>{formattedDate}</Text>
-
-          <TouchableOpacity
-            onPress={() => onChangeDate(1)}
-            disabled={isToday}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons
-              name="chevron-forward"
-              size={16}
-              color={isToday ? COLORS.cardBorder : COLORS.textSecondary}
-            />
-          </TouchableOpacity>
-        </View>
+          );
+        })}
       </View>
+
+      {/* Zone 3: 1 Primary Action */}
+      <TouchableOpacity
+        onPress={onOpenSettings}
+        activeOpacity={0.75}
+        style={[
+          styles.primaryAction,
+          activeTab === 'profile' && styles.primaryActionActive,
+        ]}
+      >
+        <Text
+          style={[
+            styles.primaryActionText,
+            activeTab === 'profile' && styles.primaryActionTextActive,
+          ]}
+          numberOfLines={1}
+        >
+          Profil
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 8,
-  },
-  topRow: {
+  bar: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    paddingHorizontal: 16,
+    height: 54,
+    backgroundColor: COLORS.background,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
-  leftCol: {
-    flex: 1,
+  zoneBrand: {
+    flexShrink: 0,
+    marginRight: 10,
   },
-  brandRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  greeting: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: COLORS.text,
+  brandWordmark: {
+    fontFamily: FONTS.displayBold,
+    fontSize: 19,
+    color: COLORS.ink,
     letterSpacing: -0.5,
   },
-  aiPill: {
+  zoneNav: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 20,
-    backgroundColor: '#161A22',
-    borderWidth: 1,
+    gap: 14,
   },
-  aiPillText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  dateSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: COLORS.card,
-    paddingHorizontal: 10,
+  navItem: {
     paddingVertical: 6,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
+    position: 'relative',
+    alignItems: 'center',
   },
-  dateLabel: {
-    color: COLORS.text,
+  navText: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 13,
+    color: COLORS.inkMuted,
+  },
+  navTextActive: {
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.ink,
+  },
+  activeIndicator: {
+    position: 'absolute',
+    bottom: -11,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: COLORS.ink,
+  },
+  primaryAction: {
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: COLORS.borderStrong,
+    backgroundColor: COLORS.surface,
+    marginLeft: 8,
+  },
+  primaryActionActive: {
+    backgroundColor: COLORS.ink,
+    borderColor: COLORS.ink,
+  },
+  primaryActionText: {
+    fontFamily: FONTS.bodySemiBold,
     fontSize: 12,
-    fontWeight: '700',
-    minWidth: 50,
-    textAlign: 'center',
+    color: COLORS.ink,
+  },
+  primaryActionTextActive: {
+    color: COLORS.surface,
   },
 });

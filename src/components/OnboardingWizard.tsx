@@ -11,11 +11,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../theme/colors';
+import { COLORS, FONTS } from '../theme/colors';
 import { ActivityLevel, Gender, GoalType, UserProfile } from '../types/nutrition';
 import { calculateBMI, calculatePersonalTargets } from '../utils/calorieCalculator';
-import { testNvidiaApiKey } from '../services/nvidiaAiService';
+import { getDefaultNvidiaKey, testNvidiaApiKey } from '../services/nvidiaAiService';
 
 interface OnboardingWizardProps {
   onComplete: (profile: UserProfile) => void;
@@ -31,32 +30,37 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
   // Step 2: Age, Height, Weight
   const [age, setAge] = useState('22');
   const [heightCm, setHeightCm] = useState('178');
-  const [currentWeightKg, setCurrentWeightKg] = useState('78');
+  const [currentWeightKg, setCurrentWeightKg] = useState('76');
 
   // Step 3: Goal & Activity
   const [goalType, setGoalType] = useState<GoalType>('lose');
-  const [targetWeightKg, setTargetWeightKg] = useState('72');
+  const [targetWeightKg, setTargetWeightKg] = useState('70');
   const [activityLevel, setActivityLevel] = useState<ActivityLevel>('moderate');
 
-  // Step 4: NVIDIA API Key
-  const [nvidiaApiKey, setNvidiaApiKey] = useState('');
+  // Step 4: NVIDIA API Key (Pre-populated with user's key for zero-friction setup)
+  const [nvidiaApiKey, setNvidiaApiKey] = useState(getDefaultNvidiaKey());
   const [isTestingKey, setIsTestingKey] = useState(false);
-  const [keyTestResult, setKeyTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [keyTestResult, setKeyTestResult] = useState<{
+    ok: boolean;
+    message: string;
+  } | null>(null);
 
-  // Calculated personal targets
   const calculatedTargets = useMemo(() => {
     return calculatePersonalTargets(
       gender,
       parseInt(age, 10) || 22,
-      parseFloat(heightCm) || 175,
-      parseFloat(currentWeightKg) || 75,
+      parseFloat(heightCm) || 178,
+      parseFloat(currentWeightKg) || 76,
       activityLevel,
       goalType
     );
   }, [gender, age, heightCm, currentWeightKg, activityLevel, goalType]);
 
   const bmiInfo = useMemo(() => {
-    return calculateBMI(parseFloat(heightCm) || 175, parseFloat(currentWeightKg) || 75);
+    return calculateBMI(
+      parseFloat(currentWeightKg) || 76,
+      parseFloat(heightCm) || 178
+    );
   }, [heightCm, currentWeightKg]);
 
   const handleTestKey = async () => {
@@ -73,13 +77,13 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
       name: name.trim() || 'Kullanıcı',
       gender,
       age: parseInt(age, 10) || 22,
-      heightCm: parseFloat(heightCm) || 175,
-      currentWeightKg: parseFloat(currentWeightKg) || 75,
+      heightCm: parseFloat(heightCm) || 178,
+      currentWeightKg: parseFloat(currentWeightKg) || 76,
       targetWeightKg: parseFloat(targetWeightKg) || 70,
       activityLevel,
       goalType,
-      nvidiaApiKey: nvidiaApiKey.trim(),
-      nvidiaTextModel: 'google/gemma-3-12b-it',
+      nvidiaApiKey: (nvidiaApiKey || getDefaultNvidiaKey()).trim(),
+      nvidiaTextModel: 'nvidia/nemotron-3.5-lightning-30b-a3b',
       nvidiaVisionModel: 'nvidia/nemotron-3.5-super-vl-120b-a12b',
       targets: calculatedTargets,
     };
@@ -107,338 +111,412 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
       >
-        {/* Top Progress Header */}
+        {/* Top Editorial Bar */}
         <View style={styles.topHeader}>
-          <View style={styles.progressRow}>
-            {[1, 2, 3, 4, 5].map((i) => (
-              <View
-                key={i}
-                style={[
-                  styles.progressSegment,
-                  i <= step && styles.progressSegmentActive,
-                ]}
-              />
-            ))}
+          <View style={styles.topBarRow}>
+            <Text style={styles.brandWordmark}>Eatless</Text>
+            <Text style={styles.stepIndicator}>Adım 0{step} / 05</Text>
           </View>
-          <Text style={styles.stepIndicator}>Adım {step} / 5</Text>
+          <View style={styles.progressTrack}>
+            <View
+              style={[
+                styles.progressFill,
+                { width: `${(step / 5) * 100}%` },
+              ]}
+            />
+          </View>
         </View>
 
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           {/* STEP 1: Name & Gender */}
           {step === 1 && (
-            <View style={styles.stepContainer}>
-              <View style={styles.iconBadge}>
-                <Ionicons name="person-add" size={28} color={COLORS.primary} />
-              </View>
-              <Text style={styles.title}>Eatless'a Hoş Geldin!</Text>
+            <View style={styles.stepBlock}>
+              <Text style={styles.sectionNumber}>01. Kişisel Kimlik</Text>
+              <Text style={styles.title}>Metabolik profilinizi oluşturalım.</Text>
               <Text style={styles.subtitle}>
-                Sana özel kalori ve makro hesaplaması yapabilmemiz için önce tanışalım.
+                Klinik Mifflin-St Jeor denklemiyle bazal metabolizma hızınızı ve makro
+                ihtiyacınızı hesaplamak için temel bilgilerinizi girin.
               </Text>
 
-              <Text style={styles.label}>Adın nedir?</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Örn: Ahmet"
-                placeholderTextColor={COLORS.textMuted}
-                value={name}
-                onChangeText={setName}
-                autoFocus
-              />
-
-              <Text style={styles.label}>Biyolojik Cinsiyetin (Metabolizma hesabı için)</Text>
-              <View style={styles.rowGap}>
-                <TouchableOpacity
-                  style={[styles.choiceCard, gender === 'male' && styles.choiceCardActive]}
-                  onPress={() => setGender('male')}
-                >
-                  <Ionicons
-                    name="male"
-                    size={26}
-                    color={gender === 'male' ? COLORS.primary : COLORS.textSecondary}
+              <View style={styles.surfaceGroup}>
+                <View style={styles.fieldBlock}>
+                  <Text style={styles.fieldLabel}>Adınız</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Örn: Mert"
+                    placeholderTextColor={COLORS.inkMuted}
+                    value={name}
+                    onChangeText={setName}
+                    autoFocus
                   />
-                  <Text style={[styles.choiceTitle, gender === 'male' && styles.choiceTitleActive]}>
-                    Erkek
-                  </Text>
-                </TouchableOpacity>
+                </View>
 
-                <TouchableOpacity
-                  style={[styles.choiceCard, gender === 'female' && styles.choiceCardActive]}
-                  onPress={() => setGender('female')}
-                >
-                  <Ionicons
-                    name="female"
-                    size={26}
-                    color={gender === 'female' ? COLORS.primary : COLORS.textSecondary}
-                  />
-                  <Text style={[styles.choiceTitle, gender === 'female' && styles.choiceTitleActive]}>
-                    Kadın
-                  </Text>
-                </TouchableOpacity>
+                <View style={[styles.fieldBlock, styles.hairlineTop]}>
+                  <Text style={styles.fieldLabel}>Biyolojik Cinsiyet</Text>
+                  <View style={styles.segmentedRow}>
+                    <TouchableOpacity
+                      activeOpacity={0.75}
+                      onPress={() => setGender('male')}
+                      style={[
+                        styles.segmentChoice,
+                        gender === 'male' && styles.segmentChoiceActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.segmentChoiceText,
+                          gender === 'male' && styles.segmentChoiceTextActive,
+                        ]}
+                      >
+                        Erkek
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      activeOpacity={0.75}
+                      onPress={() => setGender('female')}
+                      style={[
+                        styles.segmentChoice,
+                        gender === 'female' && styles.segmentChoiceActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.segmentChoiceText,
+                          gender === 'female' && styles.segmentChoiceTextActive,
+                        ]}
+                      >
+                        Kadın
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
               </View>
             </View>
           )}
 
           {/* STEP 2: Age, Height, Current Weight */}
           {step === 2 && (
-            <View style={styles.stepContainer}>
-              <View style={styles.iconBadge}>
-                <Ionicons name="body" size={28} color={COLORS.primary} />
-              </View>
-              <Text style={styles.title}>Vücut Ölçülerin</Text>
+            <View style={styles.stepBlock}>
+              <Text style={styles.sectionNumber}>02. Antropometrik Ölçüler</Text>
+              <Text style={styles.title}>Vücut ölçülerinizi girin.</Text>
               <Text style={styles.subtitle}>
-                Mifflin-St Jeor klinik formülüyle Bazal Metabolizma Hızını (BMR) hesaplıyoruz.
+                Doğru enerji bütçesi ve günlük su hedefi için güncel boy, yaş ve
+                tartım değerlerinizi belirtin.
               </Text>
 
-              <View style={styles.rowGap}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>Yaş</Text>
+              <View style={styles.surfaceGroup}>
+                <View style={styles.fieldBlock}>
+                  <Text style={styles.fieldLabel}>Yaş</Text>
                   <TextInput
-                    style={styles.input}
+                    style={styles.monoInput}
                     keyboardType="numeric"
                     value={age}
                     onChangeText={setAge}
                     placeholder="22"
-                    placeholderTextColor={COLORS.textMuted}
+                    placeholderTextColor={COLORS.inkMuted}
                   />
                 </View>
 
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>Boy (cm)</Text>
+                <View style={[styles.fieldBlock, styles.hairlineTop]}>
+                  <Text style={styles.fieldLabel}>Boy (cm)</Text>
                   <TextInput
-                    style={styles.input}
+                    style={styles.monoInput}
                     keyboardType="numeric"
                     value={heightCm}
                     onChangeText={setHeightCm}
                     placeholder="178"
-                    placeholderTextColor={COLORS.textMuted}
+                    placeholderTextColor={COLORS.inkMuted}
                   />
                 </View>
-              </View>
 
-              <Text style={styles.label}>Mevcut Kilon (kg)</Text>
-              <TextInput
-                style={styles.input}
-                keyboardType="decimal-pad"
-                value={currentWeightKg}
-                onChangeText={setCurrentWeightKg}
-                placeholder="78"
-                placeholderTextColor={COLORS.textMuted}
-              />
-
-              {/* Live BMI Box */}
-              <View style={styles.bmiBox}>
-                <View>
-                  <Text style={styles.bmiLabel}>Vücut Kitle İndeksin (VKİ)</Text>
-                  <Text style={[styles.bmiStatus, { color: bmiInfo.color }]}>{bmiInfo.label}</Text>
+                <View style={[styles.fieldBlock, styles.hairlineTop]}>
+                  <Text style={styles.fieldLabel}>Güncel Ağırlık (kg)</Text>
+                  <TextInput
+                    style={styles.monoInput}
+                    keyboardType="decimal-pad"
+                    value={currentWeightKg}
+                    onChangeText={setCurrentWeightKg}
+                    placeholder="76"
+                    placeholderTextColor={COLORS.inkMuted}
+                  />
                 </View>
-                <Text style={[styles.bmiNumber, { color: bmiInfo.color }]}>{bmiInfo.bmi}</Text>
+
+                <View style={[styles.bmiRow, styles.hairlineTop]}>
+                  <View>
+                    <Text style={styles.bmiTitle}>Vücut Kitle İndeksi (VKİ)</Text>
+                    <Text style={styles.bmiCategory}>{bmiInfo.category}</Text>
+                  </View>
+                  <Text style={[styles.bmiValue, { color: bmiInfo.color }]}>
+                    {bmiInfo.bmi}
+                  </Text>
+                </View>
               </View>
             </View>
           )}
 
           {/* STEP 3: Goal & Activity Level */}
           {step === 3 && (
-            <View style={styles.stepContainer}>
-              <View style={styles.iconBadge}>
-                <Ionicons name="trophy" size={28} color={COLORS.primary} />
-              </View>
-              <Text style={styles.title}>Hedefin ve Hareket Seviyen</Text>
+            <View style={styles.stepBlock}>
+              <Text style={styles.sectionNumber}>03. Enerji Hedefi ve Aktivite</Text>
+              <Text style={styles.title}>Hedefinizi ve hareket düzeyinizi seçin.</Text>
               <Text style={styles.subtitle}>
-                Günlük kalori açığını veya fazlasını hedefine göre belirleyelim.
+                Günlük toplam enerji harcamanıza (TDEE) göre kalori açığı veya fazlası
+                otomatik yapılandırılır.
               </Text>
 
-              <Text style={styles.label}>Ana Hedefin Nedir?</Text>
-              <View style={styles.verticalChoices}>
+              <Text style={styles.groupHeading}>Birincil Hedef</Text>
+              <View style={styles.surfaceGroup}>
                 {[
-                  { id: 'lose', title: '🔥 Kilo Vermek & Yağ Yakmak', desc: 'Günlük -500 kcal sağlıklı kalori açığı' },
-                  { id: 'maintain', title: '⚖️ Formu ve Kiloyu Korumak', desc: 'Harcanan enerjiye eşit dengeli kalori' },
-                  { id: 'gain', title: '💪 Kas ve Hacim Kazanmak', desc: 'Günlük +400 kcal temiz büyüme fazlası' },
-                ].map((item) => (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={[
-                      styles.listChoice,
-                      goalType === item.id && styles.listChoiceActive,
-                    ]}
-                    onPress={() => setGoalType(item.id as GoalType)}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.listChoiceTitle}>{item.title}</Text>
-                      <Text style={styles.listChoiceDesc}>{item.desc}</Text>
-                    </View>
-                    {goalType === item.id && (
-                      <Ionicons name="checkmark-circle" size={22} color={COLORS.primary} />
-                    )}
-                  </TouchableOpacity>
-                ))}
+                  {
+                    id: 'lose',
+                    title: 'Kilo Vermek ve Yağ Yakmak',
+                    desc: 'TDEE üzerinden günlük -500 kcal kontrollü açık',
+                  },
+                  {
+                    id: 'maintain',
+                    title: 'Mevcut Formu Korumak',
+                    desc: 'Harcanan enerjiye eşit izokalorik denge',
+                  },
+                  {
+                    id: 'gain',
+                    title: 'Kas ve Hacim Kazanmak',
+                    desc: 'TDEE üzerinden günlük +400 kcal temiz büyüme fazlası',
+                  },
+                ].map((item, idx) => {
+                  const selected = goalType === item.id;
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      activeOpacity={0.75}
+                      onPress={() => setGoalType(item.id as GoalType)}
+                      style={[styles.optionRow, idx > 0 && styles.hairlineTop]}
+                    >
+                      <View style={styles.optionTextCol}>
+                        <Text
+                          style={[
+                            styles.optionTitle,
+                            selected && styles.optionTitleActive,
+                          ]}
+                        >
+                          {item.title}
+                        </Text>
+                        <Text style={styles.optionDesc}>{item.desc}</Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.radioOuter,
+                          selected && styles.radioOuterActive,
+                        ]}
+                      >
+                        {selected && <View style={styles.radioInner} />}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
 
-              <Text style={styles.label}>Hedef Kilon (kg)</Text>
-              <TextInput
-                style={styles.input}
-                keyboardType="decimal-pad"
-                value={targetWeightKg}
-                onChangeText={setTargetWeightKg}
-                placeholder="72"
-                placeholderTextColor={COLORS.textMuted}
-              />
+              <Text style={styles.groupHeading}>Hedef Ağırlık (kg)</Text>
+              <View style={styles.surfaceGroup}>
+                <View style={styles.fieldBlock}>
+                  <TextInput
+                    style={styles.monoInput}
+                    keyboardType="decimal-pad"
+                    value={targetWeightKg}
+                    onChangeText={setTargetWeightKg}
+                    placeholder="70"
+                    placeholderTextColor={COLORS.inkMuted}
+                  />
+                </View>
+              </View>
 
-              <Text style={styles.label}>Günlük Hareket Seviyen</Text>
-              <View style={styles.verticalChoices}>
+              <Text style={styles.groupHeading}>Fiziksel Aktivite Çarpanı</Text>
+              <View style={styles.surfaceGroup}>
                 {[
-                  { id: 'sedentary', title: '🛋️ Hareketsiz', desc: 'Masa başı iş, az yürüyüş' },
-                  { id: 'light', title: '🚶 Hafif Aktif', desc: 'Haftada 1-2 gün egzersiz veya yürüyüş' },
-                  { id: 'moderate', title: '🏃 Orta Aktif', desc: 'Haftada 3-4 gün düzenli antrenman' },
-                  { id: 'active', title: '⚡ Çok Aktif', desc: 'Haftada 5-6 gün yoğun antrenman' },
-                ].map((act) => (
-                  <TouchableOpacity
-                    key={act.id}
-                    style={[
-                      styles.listChoice,
-                      activityLevel === act.id && styles.listChoiceActive,
-                    ]}
-                    onPress={() => setActivityLevel(act.id as ActivityLevel)}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.listChoiceTitle}>{act.title}</Text>
-                      <Text style={styles.listChoiceDesc}>{act.desc}</Text>
-                    </View>
-                    {activityLevel === act.id && (
-                      <Ionicons name="checkmark-circle" size={22} color={COLORS.primary} />
-                    )}
-                  </TouchableOpacity>
-                ))}
+                  {
+                    id: 'sedentary',
+                    title: 'Hareketsiz (x1.2)',
+                    desc: 'Masa başı çalışma, minimum günlük yürüyüş',
+                  },
+                  {
+                    id: 'light',
+                    title: 'Hafif Aktif (x1.375)',
+                    desc: 'Haftada 1-2 gün egzersiz veya düzenli yürüyüş',
+                  },
+                  {
+                    id: 'moderate',
+                    title: 'Orta Aktif (x1.55)',
+                    desc: 'Haftada 3-4 gün direnç veya kardiyo antrenmanı',
+                  },
+                  {
+                    id: 'active',
+                    title: 'Yüksek Aktif (x1.725)',
+                    desc: 'Haftada 5-6 gün yoğun antrenman temposu',
+                  },
+                ].map((act, idx) => {
+                  const selected = activityLevel === act.id;
+                  return (
+                    <TouchableOpacity
+                      key={act.id}
+                      activeOpacity={0.75}
+                      onPress={() => setActivityLevel(act.id as ActivityLevel)}
+                      style={[styles.optionRow, idx > 0 && styles.hairlineTop]}
+                    >
+                      <View style={styles.optionTextCol}>
+                        <Text
+                          style={[
+                            styles.optionTitle,
+                            selected && styles.optionTitleActive,
+                          ]}
+                        >
+                          {act.title}
+                        </Text>
+                        <Text style={styles.optionDesc}>{act.desc}</Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.radioOuter,
+                          selected && styles.radioOuterActive,
+                        ]}
+                      >
+                        {selected && <View style={styles.radioInner} />}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </View>
           )}
 
           {/* STEP 4: NVIDIA API Key Connection */}
           {step === 4 && (
-            <View style={styles.stepContainer}>
-              <View style={[styles.iconBadge, { backgroundColor: COLORS.nvidiaGlow }]}>
-                <Ionicons name="hardware-chip" size={28} color={COLORS.nvidia} />
-              </View>
-              <Text style={styles.title}>NVIDIA AI Bağlantısı</Text>
+            <View style={styles.stepBlock}>
+              <Text style={styles.sectionNumber}>04. NVIDIA NIM Yapay Zeka Motoru</Text>
+              <Text style={styles.title}>Klinik AI ve Görsel Analiz Bağlantısı.</Text>
               <Text style={styles.subtitle}>
-                Yemek fotoğraflarını ve besinleri gerçek yapay zeka (Llama-3.2 Vision & Llama-3.1 70B) ile analiz etmek için NVIDIA API anahtarını gir.
+                Nemotron-3.5-Super-VL (Fotoğraf Analizi) ve Nemotron-3.5-Lightning (Besin
+                ve Diyetisyen Motoru) için kişisel NVIDIA API anahtarınız hazırlandı.
               </Text>
 
-              <Text style={styles.label}>NVIDIA API Key (nvapi-...)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="nvapi-..."
-                placeholderTextColor={COLORS.textMuted}
-                value={nvidiaApiKey}
-                onChangeText={setNvidiaApiKey}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-
-              <TouchableOpacity
-                style={[styles.testBtn, !nvidiaApiKey.trim() && { opacity: 0.5 }]}
-                onPress={handleTestKey}
-                disabled={!nvidiaApiKey.trim() || isTestingKey}
-              >
-                {isTestingKey ? (
-                  <ActivityIndicator size="small" color="#FFF" />
-                ) : (
-                  <>
-                    <Ionicons name="flash" size={16} color="#FFF" />
-                    <Text style={styles.testBtnText}>Anahtarı Şimdi Test Et</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-
-              {keyTestResult && (
-                <View
-                  style={[
-                    styles.testResultBox,
-                    { borderColor: keyTestResult.ok ? COLORS.nvidia : COLORS.danger },
-                  ]}
-                >
-                  <Ionicons
-                    name={keyTestResult.ok ? 'checkmark-circle' : 'alert-circle'}
-                    size={18}
-                    color={keyTestResult.ok ? COLORS.nvidia : COLORS.danger}
+              <View style={styles.surfaceGroup}>
+                <View style={styles.fieldBlock}>
+                  <Text style={styles.fieldLabel}>NVIDIA API Anahtarı (nvapi-...)</Text>
+                  <TextInput
+                    style={styles.monoInput}
+                    placeholder="nvapi-..."
+                    placeholderTextColor={COLORS.inkMuted}
+                    value={nvidiaApiKey}
+                    onChangeText={setNvidiaApiKey}
+                    autoCapitalize="none"
+                    autoCorrect={false}
                   />
-                  <Text
-                    style={[
-                      styles.testResultText,
-                      { color: keyTestResult.ok ? '#D1E7A3' : '#FCA5A5' },
-                    ]}
-                  >
-                    {keyTestResult.message}
-                  </Text>
                 </View>
-              )}
 
-              <Text style={styles.helperNote}>
-                Not: Anahtarın yalnızca senin telefonunun hafızasında saklanır. Şimdi girmek istemezsen daha sonra Profil sekmesinden de ekleyebilirsin.
+                <View style={[styles.fieldBlock, styles.hairlineTop]}>
+                  <TouchableOpacity
+                    style={[
+                      styles.testBtn,
+                      isTestingKey && { opacity: 0.7 },
+                    ]}
+                    onPress={handleTestKey}
+                    disabled={isTestingKey}
+                    activeOpacity={0.8}
+                  >
+                    {isTestingKey ? (
+                      <ActivityIndicator size="small" color={COLORS.surface} />
+                    ) : (
+                      <Text style={styles.testBtnText}>Bağlantıyı Test Et</Text>
+                    )}
+                  </TouchableOpacity>
+
+                  {keyTestResult && (
+                    <View style={styles.testResultRow}>
+                      <Text
+                        style={[
+                          styles.testResultText,
+                          {
+                            color: keyTestResult.ok
+                              ? COLORS.accent
+                              : COLORS.danger,
+                          },
+                        ]}
+                      >
+                        {keyTestResult.message}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+
+              <Text style={styles.footnote}>
+                Anahtarınız yalnızca cihazınızın yerel hafızasında saklanır ve doğrudan
+                integrate.api.nvidia.com uç noktası ile haberleşir.
               </Text>
             </View>
           )}
 
           {/* STEP 5: Final Summary Plan */}
           {step === 5 && (
-            <View style={styles.stepContainer}>
-              <View style={styles.iconBadge}>
-                <Ionicons name="sparkles" size={28} color={COLORS.primary} />
-              </View>
-              <Text style={styles.title}>Tebrikler, {name}!</Text>
+            <View style={styles.stepBlock}>
+              <Text style={styles.sectionNumber}>05. Kişisel Beslenme Protokolü</Text>
+              <Text style={styles.title}>Planınız hazır, {name}.</Text>
               <Text style={styles.subtitle}>
-                Ölçülerine göre hesaplanan bilimsel beslenme planın hazır:
+                Ölçülerinize göre hesaplanan günlük enerji bütçesi ve makro dağılımınız:
               </Text>
 
-              <View style={styles.summaryCard}>
-                <View style={styles.summaryTop}>
-                  <Text style={styles.summaryCal}>{calculatedTargets.calories} kcal</Text>
-                  <Text style={styles.summaryCalSub}>Günlük Kalori Hedefin</Text>
+              <View style={styles.surfaceGroup}>
+                <View style={styles.summaryHero}>
+                  <Text style={styles.summaryHeroLabel}>Günlük Hedef Bütçesi</Text>
+                  <View style={styles.summaryHeroValRow}>
+                    <Text style={styles.summaryHeroVal}>
+                      {calculatedTargets.calories}
+                    </Text>
+                    <Text style={styles.summaryHeroUnit}>kcal / gün</Text>
+                  </View>
+                  <Text style={styles.summaryInlineMeta}>
+                    BMR {calculatedTargets.bmr} kcal · TDEE {calculatedTargets.tdee}{' '}
+                    kcal · Su {calculatedTargets.waterMl} ml
+                  </Text>
                 </View>
 
-                <View style={styles.metaRow}>
-                  <Text style={styles.metaItem}>Bazal (BMR): {calculatedTargets.bmr} kcal</Text>
-                  <Text style={styles.metaItem}>Harcanan (TDEE): {calculatedTargets.tdee} kcal</Text>
+                <View style={[styles.summaryMacroRow, styles.hairlineTop]}>
+                  <Text style={styles.summaryMacroName}>Günlük Protein</Text>
+                  <Text style={styles.summaryMacroVal}>
+                    {calculatedTargets.protein} g
+                  </Text>
                 </View>
 
-                <View style={styles.macroSummaryRow}>
-                  <View style={styles.macroPill}>
-                    <Text style={[styles.macroPillVal, { color: COLORS.protein }]}>
-                      {calculatedTargets.protein}g
-                    </Text>
-                    <Text style={styles.macroPillLabel}>Protein</Text>
-                  </View>
-                  <View style={styles.macroPill}>
-                    <Text style={[styles.macroPillVal, { color: COLORS.carbs }]}>
-                      {calculatedTargets.carbs}g
-                    </Text>
-                    <Text style={styles.macroPillLabel}>Karbonhidrat</Text>
-                  </View>
-                  <View style={styles.macroPill}>
-                    <Text style={[styles.macroPillVal, { color: COLORS.fat }]}>
-                      {calculatedTargets.fat}g
-                    </Text>
-                    <Text style={styles.macroPillLabel}>Yağ</Text>
-                  </View>
-                  <View style={styles.macroPill}>
-                    <Text style={[styles.macroPillVal, { color: COLORS.water }]}>
-                      {calculatedTargets.waterMl}ml
-                    </Text>
-                    <Text style={styles.macroPillLabel}>Su</Text>
-                  </View>
+                <View style={[styles.summaryMacroRow, styles.hairlineTop]}>
+                  <Text style={styles.summaryMacroName}>Günlük Karbonhidrat</Text>
+                  <Text style={styles.summaryMacroVal}>
+                    {calculatedTargets.carbs} g
+                  </Text>
+                </View>
+
+                <View style={[styles.summaryMacroRow, styles.hairlineTop]}>
+                  <Text style={styles.summaryMacroName}>Günlük Yağ</Text>
+                  <Text style={styles.summaryMacroVal}>
+                    {calculatedTargets.fat} g
+                  </Text>
                 </View>
               </View>
             </View>
           )}
         </ScrollView>
 
-        {/* Bottom Navigation Buttons */}
+        {/* Bottom Navigation Action Bar */}
         <View style={styles.bottomBar}>
           {step > 1 && (
             <TouchableOpacity
               style={styles.backBtn}
               onPress={() => setStep(step - 1)}
+              activeOpacity={0.75}
             >
-              <Ionicons name="arrow-back" size={20} color={COLORS.text} />
+              <Text style={styles.backBtnText}>Geri</Text>
             </TouchableOpacity>
           )}
 
@@ -447,14 +525,17 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
               style={[styles.nextBtn, !canGoNext() && styles.nextBtnDisabled]}
               disabled={!canGoNext()}
               onPress={() => setStep(step + 1)}
+              activeOpacity={0.8}
             >
               <Text style={styles.nextBtnText}>Devam Et</Text>
-              <Ionicons name="arrow-forward" size={18} color="#FFF" />
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity style={styles.finishBtn} onPress={handleFinish}>
-              <Ionicons name="rocket" size={18} color="#FFF" />
-              <Text style={styles.nextBtnText}>Eatless'ı Başlat!</Text>
+            <TouchableOpacity
+              style={styles.finishBtn}
+              onPress={handleFinish}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.nextBtnText}>Uygulamayı Başlat</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -470,285 +551,330 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'android' ? 25 : 0,
   },
   topHeader: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 8,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
   },
-  progressRow: {
+  topBarRow: {
     flexDirection: 'row',
-    gap: 6,
-    marginBottom: 8,
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 10,
   },
-  progressSegment: {
-    flex: 1,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: COLORS.cardSecondary,
-  },
-  progressSegmentActive: {
-    backgroundColor: COLORS.primary,
+  brandWordmark: {
+    fontFamily: FONTS.displayBold,
+    fontSize: 18,
+    color: COLORS.ink,
+    letterSpacing: -0.4,
   },
   stepIndicator: {
-    color: COLORS.textSecondary,
+    fontFamily: FONTS.mono,
     fontSize: 12,
-    fontWeight: '700',
+    color: COLORS.inkMuted,
+    fontVariant: ['tabular-nums'],
+  },
+  progressTrack: {
+    height: 3,
+    backgroundColor: COLORS.border,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: COLORS.ink,
   },
   scrollContent: {
-    paddingHorizontal: 24,
-    paddingBottom: 40,
+    paddingHorizontal: 20,
+    paddingBottom: 36,
   },
-  stepContainer: {
-    marginTop: 12,
+  stepBlock: {
+    marginTop: 22,
   },
-  iconBadge: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    backgroundColor: COLORS.primaryGlow,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
+  sectionNumber: {
+    fontFamily: FONTS.monoMedium,
+    fontSize: 12,
+    color: COLORS.accent,
+    marginBottom: 6,
   },
   title: {
+    fontFamily: FONTS.displayBold,
     fontSize: 26,
-    fontWeight: '900',
-    color: COLORS.text,
+    color: COLORS.ink,
+    letterSpacing: -0.6,
     marginBottom: 8,
   },
   subtitle: {
+    fontFamily: FONTS.body,
     fontSize: 14,
-    color: COLORS.textSecondary,
-    lineHeight: 20,
-    marginBottom: 24,
+    color: COLORS.inkSecondary,
+    lineHeight: 21,
+    marginBottom: 20,
   },
-  label: {
+  groupHeading: {
+    fontFamily: FONTS.display,
     fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
+    color: COLORS.ink,
+    marginTop: 16,
     marginBottom: 8,
-    marginTop: 12,
+  },
+  surfaceGroup: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    overflow: 'hidden',
+  },
+  fieldBlock: {
+    padding: 16,
+  },
+  hairlineTop: {
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  fieldLabel: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 12,
+    color: COLORS.inkSecondary,
+    marginBottom: 8,
   },
   input: {
-    backgroundColor: COLORS.card,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    color: COLORS.text,
-    fontSize: 16,
-    fontWeight: '600',
+    backgroundColor: COLORS.background,
     borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-  },
-  rowGap: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  choiceCard: {
-    flex: 1,
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    paddingVertical: 20,
-    alignItems: 'center',
-    gap: 8,
-    borderWidth: 1.5,
-    borderColor: COLORS.cardBorder,
-  },
-  choiceCardActive: {
-    borderColor: COLORS.primary,
-    backgroundColor: COLORS.primaryGlow,
-  },
-  choiceTitle: {
-    color: COLORS.textSecondary,
+    borderColor: COLORS.borderStrong,
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    fontFamily: FONTS.bodySemiBold,
     fontSize: 15,
-    fontWeight: '700',
+    color: COLORS.ink,
   },
-  choiceTitleActive: {
-    color: COLORS.text,
+  monoInput: {
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.borderStrong,
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    fontFamily: FONTS.monoMedium,
+    fontSize: 14,
+    color: COLORS.ink,
+    fontVariant: ['tabular-nums'],
   },
-  bmiBox: {
+  segmentedRow: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.surfaceMuted,
+    padding: 4,
+    borderRadius: 8,
+    gap: 4,
+  },
+  segmentChoice: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 5,
+    alignItems: 'center',
+  },
+  segmentChoiceActive: {
+    backgroundColor: COLORS.surface,
+  },
+  segmentChoiceText: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 13,
+    color: COLORS.inkMuted,
+  },
+  segmentChoiceTextActive: {
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.ink,
+  },
+  bmiRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: COLORS.card,
     padding: 16,
-    borderRadius: 16,
-    marginTop: 20,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
   },
-  bmiLabel: {
-    color: COLORS.textSecondary,
+  bmiTitle: {
+    fontFamily: FONTS.bodyMedium,
     fontSize: 12,
-    fontWeight: '600',
+    color: COLORS.inkSecondary,
   },
-  bmiStatus: {
-    fontSize: 16,
-    fontWeight: '800',
-    marginTop: 2,
-  },
-  bmiNumber: {
-    fontSize: 28,
-    fontWeight: '900',
-  },
-  verticalChoices: {
-    gap: 10,
-  },
-  listChoice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.card,
-    padding: 14,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: COLORS.cardBorder,
-  },
-  listChoiceActive: {
-    borderColor: COLORS.primary,
-    backgroundColor: COLORS.primaryGlow,
-  },
-  listChoiceTitle: {
-    color: COLORS.text,
+  bmiCategory: {
+    fontFamily: FONTS.bodySemiBold,
     fontSize: 14,
-    fontWeight: '700',
-  },
-  listChoiceDesc: {
-    color: COLORS.textSecondary,
-    fontSize: 12,
+    color: COLORS.ink,
     marginTop: 2,
+  },
+  bmiValue: {
+    fontFamily: FONTS.monoSemiBold,
+    fontSize: 26,
+    fontVariant: ['tabular-nums'],
+  },
+  optionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 15,
+  },
+  optionTextCol: {
+    flex: 1,
+    marginRight: 12,
+  },
+  optionTitle: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 14,
+    color: COLORS.ink,
+    marginBottom: 2,
+  },
+  optionTitleActive: {
+    fontFamily: FONTS.bodySemiBold,
+    color: COLORS.accent,
+  },
+  optionDesc: {
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    color: COLORS.inkMuted,
+  },
+  radioOuter: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    borderColor: COLORS.borderStrong,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  radioOuterActive: {
+    borderColor: COLORS.accent,
+  },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: COLORS.accent,
   },
   testBtn: {
-    flexDirection: 'row',
+    backgroundColor: COLORS.ink,
+    paddingVertical: 12,
+    borderRadius: 6,
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: COLORS.nvidia,
-    paddingVertical: 13,
-    borderRadius: 14,
-    marginTop: 14,
   },
   testBtnText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '800',
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 13,
+    color: COLORS.surface,
   },
-  testResultBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: COLORS.card,
-    padding: 12,
-    borderRadius: 12,
-    marginTop: 12,
-    borderWidth: 1,
+  testResultRow: {
+    marginTop: 10,
   },
   testResultText: {
-    flex: 1,
+    fontFamily: FONTS.mono,
     fontSize: 12,
-    fontWeight: '600',
-  },
-  helperNote: {
-    color: COLORS.textMuted,
-    fontSize: 12,
-    marginTop: 16,
     lineHeight: 18,
   },
-  summaryCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 24,
-    padding: 22,
-    borderWidth: 1.5,
-    borderColor: COLORS.primary,
-  },
-  summaryTop: {
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  summaryCal: {
-    fontSize: 42,
-    fontWeight: '900',
-    color: COLORS.primaryLight,
-  },
-  summaryCalSub: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    fontWeight: '600',
-  },
-  metaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: COLORS.cardBorder,
-    marginBottom: 16,
-  },
-  metaItem: {
-    color: COLORS.textSecondary,
+  footnote: {
+    fontFamily: FONTS.body,
     fontSize: 12,
-    fontWeight: '600',
+    color: COLORS.inkMuted,
+    marginTop: 12,
+    lineHeight: 18,
   },
-  macroSummaryRow: {
+  summaryHero: {
+    padding: 20,
+  },
+  summaryHeroLabel: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 12,
+    color: COLORS.inkSecondary,
+    marginBottom: 4,
+  },
+  summaryHeroValRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+    marginBottom: 6,
+  },
+  summaryHeroVal: {
+    fontFamily: FONTS.monoSemiBold,
+    fontSize: 40,
+    color: COLORS.ink,
+    letterSpacing: -1,
+    fontVariant: ['tabular-nums'],
+  },
+  summaryHeroUnit: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 14,
+    color: COLORS.inkMuted,
+  },
+  summaryInlineMeta: {
+    fontFamily: FONTS.mono,
+    fontSize: 11,
+    color: COLORS.inkMuted,
+    fontVariant: ['tabular-nums'],
+  },
+  summaryMacroRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-  },
-  macroPill: {
     alignItems: 'center',
-    flex: 1,
+    paddingHorizontal: 20,
+    paddingVertical: 13,
   },
-  macroPillVal: {
-    fontSize: 18,
-    fontWeight: '900',
+  summaryMacroName: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 13,
+    color: COLORS.inkSecondary,
   },
-  macroPillLabel: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-    fontWeight: '600',
+  summaryMacroVal: {
+    fontFamily: FONTS.monoSemiBold,
+    fontSize: 15,
+    color: COLORS.ink,
+    fontVariant: ['tabular-nums'],
   },
   bottomBar: {
     flexDirection: 'row',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    gap: 10,
     borderTopWidth: 1,
-    borderTopColor: COLORS.cardBorder,
+    borderTopColor: COLORS.border,
+    backgroundColor: COLORS.background,
   },
   backBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: COLORS.card,
+    paddingHorizontal: 18,
+    height: 46,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: COLORS.borderStrong,
+    backgroundColor: COLORS.surface,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
+  },
+  backBtnText: {
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 14,
+    color: COLORS.ink,
   },
   nextBtn: {
     flex: 1,
-    flexDirection: 'row',
-    backgroundColor: COLORS.primary,
-    height: 52,
-    borderRadius: 16,
+    height: 46,
+    borderRadius: 6,
+    backgroundColor: COLORS.ink,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
   },
   nextBtnDisabled: {
-    opacity: 0.4,
+    opacity: 0.35,
   },
   finishBtn: {
     flex: 1,
-    flexDirection: 'row',
-    backgroundColor: COLORS.primary,
-    height: 52,
-    borderRadius: 16,
+    height: 46,
+    borderRadius: 6,
+    backgroundColor: COLORS.accent,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
   },
   nextBtnText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '800',
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 14,
+    color: COLORS.surface,
   },
 });

@@ -1,142 +1,178 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../theme/colors';
+import { COLORS, FONTS } from '../theme/colors';
 
 interface WaterCardProps {
-  currentMl: number;
+  waterMl: number;
   targetMl: number;
-  onUpdateWater: (newMl: number) => void;
+  onUpdateWater: (deltaMl: number) => void;
 }
 
 export const WaterCard: React.FC<WaterCardProps> = ({
-  currentMl,
+  waterMl,
   targetMl,
   onUpdateWater,
 }) => {
-  const percent = Math.min(100, Math.round((currentMl / targetMl) * 100));
+  const safeTarget = Math.max(targetMl, 1500);
+  const ratio = Math.min(waterMl / safeTarget, 1);
+  const pct = Math.round(ratio * 100);
+  const glasses = Math.round(waterMl / 250);
 
   return (
-    <View style={styles.card}>
-      <View style={styles.header}>
-        <View style={styles.left}>
-          <View style={styles.iconCircle}>
-            <Ionicons name="water" size={18} color={COLORS.water} />
-          </View>
-          <View>
-            <Text style={styles.title}>Su Takibi</Text>
-            <Text style={styles.subtitle}>
-              {currentMl} / {targetMl} ml (%{percent})
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.buttonsRow}>
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => onUpdateWater(Math.max(0, currentMl - 250))}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="remove" size={14} color={COLORS.textSecondary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.actionBtnAdd]}
-            onPress={() => onUpdateWater(currentMl + 250)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.btnText}>+250ml</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.actionBtnAdd]}
-            onPress={() => onUpdateWater(currentMl + 500)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.btnText}>+500ml</Text>
-          </TouchableOpacity>
-        </View>
+    <View style={styles.section}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>03. Hidrasyon Takibi</Text>
+        <Text style={styles.sectionMeta}>
+          {glasses} bardak · %{pct}
+        </Text>
       </View>
 
-      <View style={styles.track}>
-        <View style={[styles.fill, { width: `${percent}%` }]} />
+      <View style={styles.container}>
+        <View style={styles.topRow}>
+          <View>
+            <Text style={styles.label}>Günlük Su Tüketimi</Text>
+            <View style={styles.valueRow}>
+              <Text style={styles.value}>{waterMl}</Text>
+              <Text style={styles.unit}>/ {safeTarget} ml</Text>
+            </View>
+          </View>
+
+          <View style={styles.actionsRow}>
+            <TouchableOpacity
+              onPress={() => onUpdateWater(-250)}
+              activeOpacity={0.75}
+              style={styles.secondaryBtn}
+            >
+              <Text style={styles.secondaryBtnText}>-250 ml</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => onUpdateWater(250)}
+              activeOpacity={0.75}
+              style={styles.primaryBtn}
+            >
+              <Text style={styles.primaryBtnText}>+250 ml</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => onUpdateWater(500)}
+              activeOpacity={0.75}
+              style={styles.secondaryBtn}
+            >
+              <Text style={styles.secondaryBtnText}>+500 ml</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.track}>
+          <View style={[styles.fill, { width: `${pct}%` }]} />
+        </View>
       </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: COLORS.card,
-    marginHorizontal: 20,
-    marginTop: 14,
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
+  section: {
+    marginHorizontal: 16,
+    marginTop: 22,
   },
-  header: {
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 8,
+  },
+  sectionTitle: {
+    fontFamily: FONTS.displayBold,
+    fontSize: 15,
+    color: COLORS.ink,
+    letterSpacing: -0.2,
+  },
+  sectionMeta: {
+    fontFamily: FONTS.mono,
+    fontSize: 11,
+    color: COLORS.inkMuted,
+    fontVariant: ['tabular-nums'],
+  },
+  container: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 16,
+  },
+  topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 10,
     marginBottom: 12,
   },
-  left: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  iconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: '#06B6D415',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  subtitle: {
+  label: {
+    fontFamily: FONTS.bodyMedium,
     fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 2,
+    color: COLORS.inkSecondary,
+    marginBottom: 2,
   },
-  buttonsRow: {
+  valueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+  },
+  value: {
+    fontFamily: FONTS.monoSemiBold,
+    fontSize: 24,
+    color: COLORS.ink,
+    fontVariant: ['tabular-nums'],
+  },
+  unit: {
+    fontFamily: FONTS.mono,
+    fontSize: 13,
+    color: COLORS.inkMuted,
+    fontVariant: ['tabular-nums'],
+  },
+  actionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  actionBtn: {
-    backgroundColor: COLORS.cardSecondary,
+  primaryBtn: {
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 6,
+    backgroundColor: COLORS.ink,
+  },
+  primaryBtnText: {
+    fontFamily: FONTS.monoMedium,
+    fontSize: 12,
+    color: COLORS.surface,
+    fontVariant: ['tabular-nums'],
+  },
+  secondaryBtn: {
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 10,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderColor: COLORS.borderStrong,
+    backgroundColor: COLORS.background,
   },
-  actionBtnAdd: {
-    backgroundColor: '#06B6D420',
-    borderColor: '#06B6D440',
-  },
-  btnText: {
-    color: COLORS.water,
+  secondaryBtnText: {
+    fontFamily: FONTS.mono,
     fontSize: 11,
-    fontWeight: '700',
+    color: COLORS.ink,
+    fontVariant: ['tabular-nums'],
   },
   track: {
-    height: 6,
-    backgroundColor: COLORS.cardSecondary,
+    height: 5,
+    backgroundColor: COLORS.surfaceMuted,
     borderRadius: 3,
     overflow: 'hidden',
   },
   fill: {
     height: '100%',
-    backgroundColor: COLORS.water,
+    backgroundColor: COLORS.cobalt,
     borderRadius: 3,
   },
 });
