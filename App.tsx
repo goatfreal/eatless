@@ -1,19 +1,24 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Platform,
   RefreshControl,
   SafeAreaView,
   ScrollView,
   StyleSheet,
+  Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { Ionicons } from '@expo/vector-icons';
 import { Header } from './src/components/Header';
 import { DailyCalorieCard } from './src/components/DailyCalorieCard';
 import { MealSection } from './src/components/MealSection';
 import { WaterCard } from './src/components/WaterCard';
 import { FastingCard } from './src/components/FastingCard';
+import { WeightCard } from './src/components/WeightCard';
 import { AiFoodScannerModal } from './src/components/AiFoodScannerModal';
+import { AiCoachModal } from './src/components/AiCoachModal';
 import { SettingsModal } from './src/components/SettingsModal';
 import { COLORS } from './src/theme/colors';
 import { FastingTracker, FoodItem, MealType, UserSettings } from './src/types/nutrition';
@@ -43,6 +48,7 @@ export default function App() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [scannerMealType, setScannerMealType] = useState<MealType | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isCoachOpen, setIsCoachOpen] = useState(false);
 
   // Initialize data on mount
   useEffect(() => {
@@ -107,11 +113,36 @@ export default function App() {
     saveFastingState(nextState);
   };
 
+  // Weight update
+  const handleUpdateWeight = (newWeight: number, newTarget: number) => {
+    const updated: UserSettings = {
+      ...settings,
+      currentWeightKg: newWeight,
+      targetWeightKg: newTarget,
+    };
+    setSettings(updated);
+    saveUserSettings(updated);
+  };
+
   // Save Settings
   const handleSaveSettings = (updated: UserSettings) => {
     setSettings(updated);
     saveUserSettings(updated);
   };
+
+  // Calculate daily totals for AI Coach
+  const { totalCal, totalProtein } = useMemo(() => {
+    return meals.reduce(
+      (acc, m) => {
+        acc.totalCal += m.calories;
+        acc.totalProtein += m.protein;
+        return acc;
+      },
+      { totalCal: 0, totalProtein: 0 }
+    );
+  }, [meals]);
+
+  const remainingCal = Math.max(0, settings.targets.calories - totalCal);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -138,6 +169,13 @@ export default function App() {
           {/* Daily Calorie & Macro Target Card */}
           <DailyCalorieCard targets={settings.targets} meals={meals} />
 
+          {/* Weight & Target Goal Card */}
+          <WeightCard
+            currentWeight={settings.currentWeightKg}
+            targetWeight={settings.targetWeightKg}
+            onUpdateWeight={handleUpdateWeight}
+          />
+
           {/* Meals Section with AI add button */}
           <MealSection
             meals={meals}
@@ -159,6 +197,16 @@ export default function App() {
           />
         </ScrollView>
 
+        {/* Floating AI Nutrition Coach Button */}
+        <TouchableOpacity
+          style={styles.coachFab}
+          onPress={() => setIsCoachOpen(true)}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="sparkles" size={20} color="#FFFFFF" />
+          <Text style={styles.coachFabText}>AI Koç</Text>
+        </TouchableOpacity>
+
         {/* AI Scanner Modal (Camera / Text analysis via NVIDIA NIM) */}
         {scannerMealType && (
           <AiFoodScannerModal
@@ -169,6 +217,17 @@ export default function App() {
             onSaveFood={handleSaveFood}
           />
         )}
+
+        {/* AI Dietitian Coach Chat Modal */}
+        <AiCoachModal
+          visible={isCoachOpen}
+          nvidiaApiKey={settings.nvidiaApiKey}
+          totalCaloriesToday={totalCal}
+          remainingCalories={remainingCal}
+          proteinConsumed={totalProtein}
+          proteinTarget={settings.targets.protein}
+          onClose={() => setIsCoachOpen(false)}
+        />
 
         {/* Settings Modal (NVIDIA API Key & 7-Day Sideload Guide) */}
         <SettingsModal
@@ -193,6 +252,28 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   scrollContent: {
-    paddingBottom: 40,
+    paddingBottom: 70,
+  },
+  coachFab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.nvidia,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 24,
+    shadowColor: COLORS.nvidia,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.45,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  coachFabText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
   },
 });
