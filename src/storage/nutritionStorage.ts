@@ -1,85 +1,57 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { FastingTracker, FoodItem, UserSettings } from '../types/nutrition';
+import { FastingTracker, FoodItem, UserProfile, WeightEntry } from '../types/nutrition';
+import { calculatePersonalTargets } from '../utils/calorieCalculator';
 
-const SETTINGS_KEY = '@eatless_user_settings_v1';
-const FASTING_KEY = '@eatless_fasting_v1';
+const PROFILE_KEY = '@eatless_user_profile_v2';
+const FASTING_KEY = '@eatless_fasting_v2';
+const WEIGHT_HISTORY_KEY = '@eatless_weight_history_v2';
 
-export const DEFAULT_SETTINGS: UserSettings = {
+export const INITIAL_PROFILE: UserProfile = {
+  isOnboarded: false,
+  name: '',
+  gender: 'male',
+  age: 24,
+  heightCm: 178,
+  currentWeightKg: 75,
+  targetWeightKg: 70,
+  activityLevel: 'moderate',
+  goalType: 'lose',
   nvidiaApiKey: '',
-  preferredModel: 'meta/llama-3.1-70b-instruct',
-  targets: {
-    calories: 2100,
-    protein: 140,
-    carbs: 220,
-    fat: 65,
-    waterMl: 2500,
-  },
-  currentWeightKg: 78.5,
-  targetWeightKg: 74.0,
+  nvidiaTextModel: 'meta/llama-3.1-70b-instruct',
+  nvidiaVisionModel: 'meta/llama-3.2-11b-vision-instruct',
+  targets: calculatePersonalTargets('male', 24, 178, 75, 'moderate', 'lose'),
 };
 
-const DEMO_MEALS: FoodItem[] = [
-  {
-    id: 'demo-meal-1',
-    name: 'Yulaflı & Muzlu Protein Kasesi',
-    calories: 380,
-    protein: 24,
-    carbs: 54,
-    fat: 8,
-    portion: '1 kase (280g)',
-    mealType: 'breakfast',
-    timestamp: new Date().toISOString(),
-    aiTip: 'Güne yüksek lif ve proteinle başlamak kan şekerini dengeler.',
-  },
-  {
-    id: 'demo-meal-2',
-    name: 'Izgara Tavuklu Kinoa Salatası',
-    calories: 520,
-    protein: 44,
-    carbs: 38,
-    fat: 16,
-    portion: '1 büyük tabak (350g)',
-    mealType: 'lunch',
-    timestamp: new Date().toISOString(),
-    aiTip: 'Öğle yemeği için mükemmel bir kas toparlanma makro dengesi.',
-  },
-];
-
-export async function loadUserSettings(): Promise<UserSettings> {
+export async function loadUserProfile(): Promise<UserProfile> {
   try {
-    const raw = await AsyncStorage.getItem(SETTINGS_KEY);
-    if (!raw) return DEFAULT_SETTINGS;
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    const raw = await AsyncStorage.getItem(PROFILE_KEY);
+    if (!raw) return INITIAL_PROFILE;
+    return { ...INITIAL_PROFILE, ...JSON.parse(raw) };
   } catch {
-    return DEFAULT_SETTINGS;
+    return INITIAL_PROFILE;
   }
 }
 
-export async function saveUserSettings(settings: UserSettings): Promise<void> {
+export async function saveUserProfile(profile: UserProfile): Promise<void> {
   try {
-    await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
   } catch (error) {
-    console.error('Save settings error:', error);
+    console.error('Save profile error:', error);
   }
 }
 
 export async function loadDailyMeals(dateStr: string): Promise<FoodItem[]> {
-  const key = `@eatless_meals_${dateStr}`;
+  const key = `@eatless_meals_v2_${dateStr}`;
   try {
     const raw = await AsyncStorage.getItem(key);
-    if (!raw) {
-      // Seed initial meals on first launch
-      await AsyncStorage.setItem(key, JSON.stringify(DEMO_MEALS));
-      return DEMO_MEALS;
-    }
-    return JSON.parse(raw);
+    return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
   }
 }
 
 export async function saveDailyMeals(dateStr: string, meals: FoodItem[]): Promise<void> {
-  const key = `@eatless_meals_${dateStr}`;
+  const key = `@eatless_meals_v2_${dateStr}`;
   try {
     await AsyncStorage.setItem(key, JSON.stringify(meals));
   } catch (error) {
@@ -88,17 +60,17 @@ export async function saveDailyMeals(dateStr: string, meals: FoodItem[]): Promis
 }
 
 export async function loadWaterIntake(dateStr: string): Promise<number> {
-  const key = `@eatless_water_${dateStr}`;
+  const key = `@eatless_water_v2_${dateStr}`;
   try {
     const raw = await AsyncStorage.getItem(key);
-    return raw ? parseInt(raw, 10) : 1250; // 1250ml demo initial
+    return raw ? parseInt(raw, 10) : 0;
   } catch {
     return 0;
   }
 }
 
 export async function saveWaterIntake(dateStr: string, ml: number): Promise<void> {
-  const key = `@eatless_water_${dateStr}`;
+  const key = `@eatless_water_v2_${dateStr}`;
   try {
     await AsyncStorage.setItem(key, ml.toString());
   } catch (error) {
@@ -110,11 +82,23 @@ export async function loadFastingState(): Promise<FastingTracker> {
   try {
     const raw = await AsyncStorage.getItem(FASTING_KEY);
     if (!raw) {
-      return { isFasting: true, startTime: new Date(Date.now() - 14 * 3600000).toISOString(), targetHours: 16 };
+      return {
+        isFasting: false,
+        protocol: '16:8',
+        startTime: null,
+        targetHours: 16,
+        completedFastsCount: 0,
+      };
     }
     return JSON.parse(raw);
   } catch {
-    return { isFasting: false, startTime: null, targetHours: 16 };
+    return {
+      isFasting: false,
+      protocol: '16:8',
+      startTime: null,
+      targetHours: 16,
+      completedFastsCount: 0,
+    };
   }
 }
 
@@ -123,5 +107,22 @@ export async function saveFastingState(tracker: FastingTracker): Promise<void> {
     await AsyncStorage.setItem(FASTING_KEY, JSON.stringify(tracker));
   } catch (error) {
     console.error('Save fasting error:', error);
+  }
+}
+
+export async function loadWeightHistory(): Promise<WeightEntry[]> {
+  try {
+    const raw = await AsyncStorage.getItem(WEIGHT_HISTORY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function saveWeightHistory(entries: WeightEntry[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(WEIGHT_HISTORY_KEY, JSON.stringify(entries));
+  } catch (error) {
+    console.error('Save weight history error:', error);
   }
 }

@@ -27,34 +27,45 @@ interface AiFoodScannerModalProps {
   visible: boolean;
   targetMealType: MealType;
   nvidiaApiKey: string;
+  nvidiaTextModel?: string;
+  nvidiaVisionModel?: string;
   onClose: () => void;
+  onOpenSettings: () => void;
   onSaveFood: (food: Omit<FoodItem, 'id' | 'timestamp'>) => void;
 }
 
-const QUICK_PRESETS = [
-  '1 porsiyon Izgara Tavuk ve Salata',
-  '2 dilim Kepekli Ekmek & Peynirli Menemen',
-  '1 kase Mercimek Çorbası',
-  '1 tabak Kuru Fasulye ve Pilav',
-  'Muzlu ve Fıstık Ezmeli Yulaf Kasesi',
-  '1 adet Lahmacun ve Ayran',
+const PORTION_MULTIPLIERS = [
+  { label: '0.5x Yarım', value: 0.5 },
+  { label: '1x Standart', value: 1 },
+  { label: '1.5x Büyük', value: 1.5 },
+  { label: '2x Çift', value: 2 },
 ];
 
 export const AiFoodScannerModal: React.FC<AiFoodScannerModalProps> = ({
   visible,
   targetMealType,
   nvidiaApiKey,
+  nvidiaTextModel,
+  nvidiaVisionModel,
   onClose,
+  onOpenSettings,
   onSaveFood,
 }) => {
+  const [selectedMeal, setSelectedMeal] = useState<MealType>(targetMealType);
   const [description, setDescription] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);
-  const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [result, setResult] = useState<AiAnalysisResult | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [baseResult, setBaseResult] = useState<AiAnalysisResult | null>(null);
+  const [multiplier, setMultiplier] = useState<number>(1);
 
-  // Take photo with camera
+  const hasValidKey = !!nvidiaApiKey && nvidiaApiKey.trim().startsWith('nvapi-');
+
   const handleTakePhoto = async () => {
+    if (!hasValidKey) {
+      setErrorMsg('Fotoğraf analizi için önce NVIDIA API anahtarınızı bağlamalısınız.');
+      return;
+    }
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('İzin Gerekli', 'Yemek fotoğrafı çekmek için kamera izni gerekiyor.');
@@ -68,18 +79,20 @@ export const AiFoodScannerModal: React.FC<AiFoodScannerModalProps> = ({
       base64: true,
     });
 
-    if (!res.canceled && res.assets[0]) {
+    if (!res.canceled && res.assets[0]?.base64) {
       setImageUri(res.assets[0].uri);
-      setImageBase64(res.assets[0].base64 || null);
-      analyzePhoto(res.assets[0].base64 || '');
+      runVisionAnalysis(res.assets[0].base64);
     }
   };
 
-  // Pick photo from gallery
   const handlePickPhoto = async () => {
+    if (!hasValidKey) {
+      setErrorMsg('Fotoğraf analizi için önce NVIDIA API anahtarınızı bağlamalısınız.');
+      return;
+    }
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('İzin Gerekli', 'Yemek fotoğrafı seçmek için galeri izni gerekiyor.');
+      Alert.alert('İzin Gerekli', 'Galeriden fotoğraf seçmek için izin gerekiyor.');
       return;
     }
 
@@ -90,68 +103,66 @@ export const AiFoodScannerModal: React.FC<AiFoodScannerModalProps> = ({
       base64: true,
     });
 
-    if (!res.canceled && res.assets[0]) {
+    if (!res.canceled && res.assets[0]?.base64) {
       setImageUri(res.assets[0].uri);
-      setImageBase64(res.assets[0].base64 || null);
-      analyzePhoto(res.assets[0].base64 || '');
+      runVisionAnalysis(res.assets[0].base64);
     }
   };
 
-  const analyzePhoto = async (base64: string) => {
+  const runVisionAnalysis = async (base64: string) => {
     setIsAnalyzing(true);
-    setResult(null);
+    setErrorMsg(null);
+    setBaseResult(null);
+    setMultiplier(1);
     try {
-      const res = await analyzeMealWithNvidiaVision(base64, nvidiaApiKey);
-      setResult(res);
+      const res = await analyzeMealWithNvidiaVision(base64, nvidiaApiKey, nvidiaVisionModel);
+      setBaseResult(res);
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Görsel analiz sırasında hata oluştu.');
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  const analyzeText = async (textToAnalyze?: string) => {
-    const text = textToAnalyze || description;
-    if (!text.trim()) return;
-
+  const runTextAnalysis = async () => {
+    if (!description.trim()) return;
     setIsAnalyzing(true);
-    setResult(null);
+    setErrorMsg(null);
+    setBaseResult(null);
+    setMultiplier(1);
     try {
-      const res = await analyzeMealWithNvidiaText(text, nvidiaApiKey);
-      setResult(res);
+      const res = await analyzeMealWithNvidiaText(description, nvidiaApiKey, nvidiaTextModel);
+      setBaseResult(res);
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Metin analizi sırasında hata oluştu.');
     } finally {
       setIsAnalyzing(false);
     }
   };
 
   const handleSave = () => {
-    if (!result) return;
+    if (!baseResult) return;
 
     onSaveFood({
-      name: result.name,
-      calories: result.calories,
-      protein: result.protein,
-      carbs: result.carbs,
-      fat: result.fat,
-      portion: result.portion,
-      mealType: targetMealType,
+      name:
+        multiplier === 1
+          ? baseResult.name
+          : `${baseResult.name} (${multiplier}x)`,
+      calories: Math.round(baseResult.calories * multiplier),
+      protein: Math.round(baseResult.protein * multiplier),
+      carbs: Math.round(baseResult.carbs * multiplier),
+      fat: Math.round(baseResult.fat * multiplier),
+      portion: `${multiplier}x (${baseResult.portion})`,
+      mealType: selectedMeal,
       imageUrl: imageUri || undefined,
-      aiTip: result.aiTip,
+      aiTip: baseResult.aiTip,
     });
 
-    // Reset and close
     setDescription('');
     setImageUri(null);
-    setImageBase64(null);
-    setResult(null);
+    setBaseResult(null);
+    setErrorMsg(null);
     onClose();
-  };
-
-  const getMealTitle = (type: MealType) => {
-    switch (type) {
-      case 'breakfast': return 'Kahvaltıya Ekle';
-      case 'lunch': return 'Öğle Yemeğine Ekle';
-      case 'dinner': return 'Akşam Yemeğine Ekle';
-      case 'snack': return 'Atıştırmalığa Ekle';
-    }
   };
 
   return (
@@ -165,60 +176,90 @@ export const AiFoodScannerModal: React.FC<AiFoodScannerModalProps> = ({
             {/* Header */}
             <View style={styles.header}>
               <View>
-                <Text style={styles.title}>{getMealTitle(targetMealType)}</Text>
+                <Text style={styles.title}>NVIDIA AI Besin Tarayıcı</Text>
                 <Text style={styles.subtitle}>
-                  NVIDIA AI Fotoğraf & Metin Besin Analizi
+                  Gerçek zamanlı Llama Vision & Besin Hesaplama
                 </Text>
               </View>
-              <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                <Ionicons name="close-circle" size={24} color={COLORS.textMuted} />
+              <TouchableOpacity onPress={onClose}>
+                <Ionicons name="close-circle" size={26} color={COLORS.textMuted} />
               </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Photo Capture Buttons */}
+              {/* Missing Key Warning */}
+              {!hasValidKey && (
+                <TouchableOpacity style={styles.missingKeyBox} onPress={() => { onClose(); onOpenSettings(); }}>
+                  <Ionicons name="key-outline" size={20} color="#FCA5A5" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.missingKeyTitle}>NVIDIA API Anahtarı Girilmemiş!</Text>
+                    <Text style={styles.missingKeySub}>
+                      Yapay zeka analizini kullanmak için buraya dokunup nvapi-... anahtarınızı girin.
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#FCA5A5" />
+                </TouchableOpacity>
+              )}
+
+              {/* Meal Type Selector */}
+              <View style={styles.mealTypeRow}>
+                {[
+                  { id: 'breakfast', label: 'Kahvaltı' },
+                  { id: 'lunch', label: 'Öğle' },
+                  { id: 'dinner', label: 'Akşam' },
+                  { id: 'snack', label: 'Ara Öğün' },
+                ].map((m) => (
+                  <TouchableOpacity
+                    key={m.id}
+                    style={[
+                      styles.mealTypeChip,
+                      selectedMeal === m.id && styles.mealTypeChipActive,
+                    ]}
+                    onPress={() => setSelectedMeal(m.id as MealType)}
+                  >
+                    <Text
+                      style={[
+                        styles.mealTypeText,
+                        selectedMeal === m.id && styles.mealTypeTextActive,
+                      ]}
+                    >
+                      {m.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Camera & Gallery Buttons */}
               <View style={styles.photoActionsRow}>
                 <TouchableOpacity
                   style={[styles.photoActionBtn, styles.photoActionPrimary]}
                   onPress={handleTakePhoto}
-                  activeOpacity={0.8}
                 >
                   <Ionicons name="camera" size={20} color="#FFFFFF" />
-                  <Text style={styles.photoBtnText}>Tabağın Fotoğrafını Çek</Text>
+                  <Text style={styles.photoBtnText}>Fotoğraf Çek</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={styles.photoActionBtn}
                   onPress={handlePickPhoto}
-                  activeOpacity={0.8}
                 >
-                  <Ionicons name="image-outline" size={20} color={COLORS.text} />
+                  <Ionicons name="images-outline" size={20} color={COLORS.text} />
                   <Text style={styles.photoBtnTextSecondary}>Galeriden Seç</Text>
                 </TouchableOpacity>
               </View>
 
-              {/* Image Preview if chosen */}
               {imageUri && (
                 <View style={styles.previewContainer}>
                   <Image source={{ uri: imageUri }} style={styles.previewImage} />
-                  <TouchableOpacity
-                    style={styles.removeImageBtn}
-                    onPress={() => {
-                      setImageUri(null);
-                      setImageBase64(null);
-                    }}
-                  >
-                    <Ionicons name="close" size={16} color="#FFF" />
-                  </TouchableOpacity>
                 </View>
               )}
 
-              {/* Text Input for Food Description */}
-              <Text style={styles.inputLabel}>veya Ne Yediğinizi Yazın:</Text>
+              {/* Text Input */}
+              <Text style={styles.inputLabel}>Yediğin Yemeği ve Miktarını Yaz:</Text>
               <View style={styles.textInputBox}>
                 <TextInput
                   style={styles.textInput}
-                  placeholder="Örn: 1 kase mercimek çorbası ve 1 dilim tam buğday ekmeği"
+                  placeholder="Örn: 200 gram ızgara tavuk göğsü, 1 porsiyon pirinç pilavı ve 1 kase cacık"
                   placeholderTextColor={COLORS.textMuted}
                   value={description}
                   onChangeText={setDescription}
@@ -226,86 +267,104 @@ export const AiFoodScannerModal: React.FC<AiFoodScannerModalProps> = ({
                 />
                 <TouchableOpacity
                   style={[styles.analyzeBtn, !description.trim() && styles.analyzeBtnDisabled]}
-                  onPress={() => analyzeText()}
+                  onPress={runTextAnalysis}
                   disabled={!description.trim() || isAnalyzing}
                 >
                   <Ionicons name="sparkles" size={16} color="#FFFFFF" />
-                  <Text style={styles.analyzeBtnText}>Analiz Et</Text>
+                  <Text style={styles.analyzeBtnText}>NVIDIA AI ile Hesapla</Text>
                 </TouchableOpacity>
               </View>
 
-              {/* Quick Presets */}
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.presetsRow}>
-                {QUICK_PRESETS.map((preset, idx) => (
-                  <TouchableOpacity
-                    key={idx}
-                    style={styles.presetChip}
-                    onPress={() => {
-                      setDescription(preset);
-                      analyzeText(preset);
-                    }}
-                  >
-                    <Text style={styles.presetText}>{preset}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+              {/* Error Message Display */}
+              {errorMsg && (
+                <View style={styles.errorBox}>
+                  <Ionicons name="alert-circle" size={18} color="#EF4444" />
+                  <Text style={styles.errorText}>{errorMsg}</Text>
+                </View>
+              )}
 
-              {/* Analysis Loading Indicator */}
+              {/* Loading */}
               {isAnalyzing && (
                 <View style={styles.loadingBox}>
                   <ActivityIndicator size="large" color={COLORS.nvidia} />
                   <Text style={styles.loadingText}>
-                    NVIDIA Yapay Zekası kalori ve makroları hesaplıyor...
+                    NVIDIA NIM sunucusundan besin değerleri hesaplanıyor...
                   </Text>
                 </View>
               )}
 
-              {/* Analysis Result Card */}
-              {result && !isAnalyzing && (
+              {/* Real Result Card */}
+              {baseResult && !isAnalyzing && (
                 <View style={styles.resultCard}>
                   <View style={styles.resultHeader}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.resultName}>{result.name}</Text>
-                      <Text style={styles.resultPortion}>{result.portion}</Text>
+                    <View style={{ flex: 1, marginRight: 10 }}>
+                      <Text style={styles.resultName}>{baseResult.name}</Text>
+                      <Text style={styles.resultPortion}>{baseResult.portion}</Text>
                     </View>
                     <View style={styles.calBadge}>
-                      <Text style={styles.calBadgeNumber}>{result.calories}</Text>
+                      <Text style={styles.calBadgeNumber}>
+                        {Math.round(baseResult.calories * multiplier)}
+                      </Text>
                       <Text style={styles.calBadgeUnit}>kcal</Text>
                     </View>
                   </View>
 
-                  {/* Macros breakdown */}
+                  {/* Portion Multiplier Selector */}
+                  <Text style={styles.portionLabel}>Porsiyon Çarpanı:</Text>
+                  <View style={styles.multiplierRow}>
+                    {PORTION_MULTIPLIERS.map((p) => (
+                      <TouchableOpacity
+                        key={p.value}
+                        style={[
+                          styles.multBtn,
+                          multiplier === p.value && styles.multBtnActive,
+                        ]}
+                        onPress={() => setMultiplier(p.value)}
+                      >
+                        <Text
+                          style={[
+                            styles.multText,
+                            multiplier === p.value && styles.multTextActive,
+                          ]}
+                        >
+                          {p.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {/* Macros */}
                   <View style={styles.macrosRow}>
                     <View style={[styles.macroItem, { borderColor: COLORS.protein + '40' }]}>
                       <Text style={[styles.macroItemTitle, { color: COLORS.protein }]}>Protein</Text>
-                      <Text style={styles.macroItemVal}>{result.protein}g</Text>
+                      <Text style={styles.macroItemVal}>
+                        {Math.round(baseResult.protein * multiplier)}g
+                      </Text>
                     </View>
                     <View style={[styles.macroItem, { borderColor: COLORS.carbs + '40' }]}>
                       <Text style={[styles.macroItemTitle, { color: COLORS.carbs }]}>Karb</Text>
-                      <Text style={styles.macroItemVal}>{result.carbs}g</Text>
+                      <Text style={styles.macroItemVal}>
+                        {Math.round(baseResult.carbs * multiplier)}g
+                      </Text>
                     </View>
                     <View style={[styles.macroItem, { borderColor: COLORS.fat + '40' }]}>
                       <Text style={[styles.macroItemTitle, { color: COLORS.fat }]}>Yağ</Text>
-                      <Text style={styles.macroItemVal}>{result.fat}g</Text>
+                      <Text style={styles.macroItemVal}>
+                        {Math.round(baseResult.fat * multiplier)}g
+                      </Text>
                     </View>
                   </View>
 
-                  {/* AI Coach Tip */}
-                  {result.aiTip ? (
+                  {baseResult.aiTip ? (
                     <View style={styles.aiTipBox}>
                       <Ionicons name="sparkles" size={14} color={COLORS.nvidia} />
-                      <Text style={styles.aiTipContent}>{result.aiTip}</Text>
+                      <Text style={styles.aiTipContent}>{baseResult.aiTip}</Text>
                     </View>
                   ) : null}
 
-                  {/* Save Button */}
-                  <TouchableOpacity
-                    style={styles.saveToMealBtn}
-                    onPress={handleSave}
-                    activeOpacity={0.8}
-                  >
+                  <TouchableOpacity style={styles.saveToMealBtn} onPress={handleSave}>
                     <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
-                    <Text style={styles.saveToMealBtnText}>Bu Öğünü Kaydet</Text>
+                    <Text style={styles.saveToMealBtnText}>Öğüne Ekle</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -318,12 +377,10 @@ export const AiFoodScannerModal: React.FC<AiFoodScannerModalProps> = ({
 };
 
 const styles = StyleSheet.create({
-  keyboardContainer: {
-    flex: 1,
-  },
+  keyboardContainer: { flex: 1 },
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.8)',
+    backgroundColor: 'rgba(0,0,0,0.82)',
     justifyContent: 'flex-end',
   },
   modalContent: {
@@ -331,7 +388,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     padding: 20,
-    maxHeight: '90%',
+    maxHeight: '92%',
     borderTopWidth: 1,
     borderColor: COLORS.cardBorder,
   },
@@ -339,23 +396,44 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
-  title: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: COLORS.text,
-  },
-  subtitle: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  photoActionsRow: {
+  title: { fontSize: 18, fontWeight: '800', color: COLORS.text },
+  subtitle: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
+  missingKeyBox: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 10,
-    marginBottom: 16,
+    backgroundColor: '#351316',
+    borderWidth: 1,
+    borderColor: '#7F1D1D',
+    padding: 12,
+    borderRadius: 14,
+    marginBottom: 14,
   },
+  missingKeyTitle: { color: '#FCA5A5', fontSize: 13, fontWeight: '800' },
+  missingKeySub: { color: '#FECACA', fontSize: 11, marginTop: 2 },
+  mealTypeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  mealTypeChip: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: COLORS.cardSecondary,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder,
+  },
+  mealTypeChipActive: {
+    backgroundColor: COLORS.primaryGlow,
+    borderColor: COLORS.primary,
+  },
+  mealTypeText: { color: COLORS.textSecondary, fontSize: 12, fontWeight: '600' },
+  mealTypeTextActive: { color: COLORS.primaryLight, fontWeight: '800' },
+  photoActionsRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
   photoActionBtn: {
     flex: 1,
     flexDirection: 'row',
@@ -372,56 +450,23 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
   },
-  photoBtnText: {
-    color: '#FFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  photoBtnTextSecondary: {
-    color: COLORS.text,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  previewContainer: {
-    position: 'relative',
-    marginBottom: 16,
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  previewImage: {
-    width: '100%',
-    height: 180,
-    borderRadius: 16,
-  },
-  removeImageBtn: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  inputLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-    marginBottom: 8,
-  },
+  photoBtnText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
+  photoBtnTextSecondary: { color: COLORS.text, fontSize: 13, fontWeight: '600' },
+  previewContainer: { marginBottom: 14, borderRadius: 16, overflow: 'hidden' },
+  previewImage: { width: '100%', height: 170, borderRadius: 16 },
+  inputLabel: { fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 8 },
   textInputBox: {
     backgroundColor: COLORS.cardSecondary,
     borderRadius: 16,
     padding: 12,
     borderWidth: 1,
     borderColor: COLORS.cardBorder,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   textInput: {
     color: COLORS.text,
     fontSize: 14,
-    minHeight: 50,
+    minHeight: 54,
     textAlignVertical: 'top',
   },
   analyzeBtn: {
@@ -430,71 +475,42 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     backgroundColor: COLORS.nvidia,
-    paddingVertical: 10,
+    paddingVertical: 11,
     borderRadius: 12,
     marginTop: 8,
   },
-  analyzeBtnDisabled: {
-    opacity: 0.4,
-  },
-  analyzeBtnText: {
-    color: '#FFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  presetsRow: {
+  analyzeBtnDisabled: { opacity: 0.4 },
+  analyzeBtnText: { color: '#FFF', fontSize: 13, fontWeight: '800' },
+  errorBox: {
     flexDirection: 'row',
-    marginBottom: 16,
-  },
-  presetChip: {
-    backgroundColor: COLORS.cardSecondary,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-  },
-  presetText: {
-    color: COLORS.textSecondary,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  loadingBox: {
     alignItems: 'center',
-    paddingVertical: 20,
-    gap: 10,
+    gap: 8,
+    backgroundColor: '#2D1215',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#EF4444',
+    marginBottom: 12,
   },
-  loadingText: {
-    color: COLORS.nvidia,
-    fontSize: 13,
-    fontWeight: '600',
-  },
+  errorText: { color: '#FCA5A5', fontSize: 12, flex: 1, fontWeight: '600' },
+  loadingBox: { alignItems: 'center', paddingVertical: 20, gap: 10 },
+  loadingText: { color: COLORS.nvidia, fontSize: 13, fontWeight: '600', textAlign: 'center' },
   resultCard: {
     backgroundColor: COLORS.cardSecondary,
     borderRadius: 20,
     padding: 16,
     borderWidth: 1.5,
-    borderColor: COLORS.primary + '50',
-    marginTop: 10,
+    borderColor: COLORS.primary,
     marginBottom: 20,
   },
   resultHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
   },
-  resultName: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: COLORS.text,
-  },
-  resultPortion: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
+  resultName: { fontSize: 17, fontWeight: '800', color: COLORS.text },
+  resultPortion: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
   calBadge: {
     backgroundColor: COLORS.primaryGlow,
     paddingHorizontal: 12,
@@ -504,21 +520,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.primary,
   },
-  calBadgeNumber: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: COLORS.primaryLight,
+  calBadgeNumber: { fontSize: 20, fontWeight: '900', color: COLORS.primaryLight },
+  calBadgeUnit: { fontSize: 10, fontWeight: '700', color: COLORS.primaryLight },
+  portionLabel: { color: COLORS.textSecondary, fontSize: 11, fontWeight: '700', marginBottom: 6 },
+  multiplierRow: { flexDirection: 'row', gap: 6, marginBottom: 12 },
+  multBtn: {
+    flex: 1,
+    paddingVertical: 7,
+    backgroundColor: COLORS.card,
+    borderRadius: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder,
   },
-  calBadgeUnit: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.primaryLight,
+  multBtnActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
   },
-  macrosRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
-  },
+  multText: { color: COLORS.textSecondary, fontSize: 11, fontWeight: '600' },
+  multTextActive: { color: '#FFF', fontWeight: '800' },
+  macrosRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   macroItem: {
     flex: 1,
     backgroundColor: COLORS.card,
@@ -527,16 +548,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
   },
-  macroItemTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  macroItemVal: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: COLORS.text,
-    marginTop: 2,
-  },
+  macroItemTitle: { fontSize: 11, fontWeight: '700' },
+  macroItemVal: { fontSize: 14, fontWeight: '800', color: COLORS.text, marginTop: 2 },
   aiTipBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -548,13 +561,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.nvidia + '40',
   },
-  aiTipContent: {
-    color: '#D1E7A3',
-    fontSize: 12,
-    fontWeight: '500',
-    flex: 1,
-    lineHeight: 16,
-  },
+  aiTipContent: { color: '#D1E7A3', fontSize: 12, fontWeight: '500', flex: 1 },
   saveToMealBtn: {
     backgroundColor: COLORS.primary,
     flexDirection: 'row',
@@ -564,9 +571,5 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 14,
   },
-  saveToMealBtnText: {
-    color: '#FFF',
-    fontSize: 15,
-    fontWeight: '800',
-  },
+  saveToMealBtnText: { color: '#FFF', fontSize: 15, fontWeight: '800' },
 });

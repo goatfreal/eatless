@@ -4,71 +4,111 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../theme/colors';
 
 interface HeaderProps {
-  onOpenSettings: () => void;
+  userName: string;
   hasNvidiaKey: boolean;
   selectedDate: string;
+  onChangeDate: (offsetDays: number) => void;
+  onOpenProfile: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  onOpenSettings,
+  userName,
   hasNvidiaKey,
   selectedDate,
+  onChangeDate,
+  onOpenProfile,
 }) => {
+  const todayStr = new Date().toISOString().split('T')[0];
+  const isToday = selectedDate === todayStr;
+
+  const formattedDate = isToday
+    ? 'Bugün'
+    : new Date(selectedDate).toLocaleDateString('tr-TR', {
+        day: 'numeric',
+        month: 'short',
+        weekday: 'short',
+      });
+
   return (
     <View style={styles.container}>
-      <View style={styles.leftCol}>
-        <View style={styles.brandRow}>
-          <Text style={styles.appName}>Eatless</Text>
-          <View style={[styles.aiPill, { borderColor: hasNvidiaKey ? COLORS.nvidia : '#475569' }]}>
-            <Ionicons
-              name="sparkles"
-              size={12}
-              color={hasNvidiaKey ? COLORS.nvidia : '#94A3B8'}
-            />
-            <Text style={[styles.aiPillText, { color: hasNvidiaKey ? COLORS.nvidia : '#94A3B8' }]}>
-              {hasNvidiaKey ? 'NVIDIA AI' : 'Yerel AI'}
-            </Text>
+      <View style={styles.topRow}>
+        <View style={styles.leftCol}>
+          <View style={styles.brandRow}>
+            <Text style={styles.greeting}>Merhaba, {userName}</Text>
+            <TouchableOpacity
+              style={[
+                styles.aiPill,
+                { borderColor: hasNvidiaKey ? COLORS.nvidia : COLORS.danger },
+              ]}
+              onPress={onOpenProfile}
+            >
+              <Ionicons
+                name={hasNvidiaKey ? 'checkmark-circle' : 'warning-outline'}
+                size={12}
+                color={hasNvidiaKey ? COLORS.nvidia : COLORS.danger}
+              />
+              <Text
+                style={[
+                  styles.aiPillText,
+                  { color: hasNvidiaKey ? COLORS.nvidia : COLORS.danger },
+                ]}
+              >
+                {hasNvidiaKey ? 'NVIDIA AI Aktif' : 'API Key Gir'}
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
-        <Text style={styles.dateText}>
-          {new Date(selectedDate).toLocaleDateString('tr-TR', {
-            weekday: 'long',
-            day: 'numeric',
-            month: 'long',
-          })}
-        </Text>
-      </View>
 
-      <TouchableOpacity
-        style={styles.settingsBtn}
-        onPress={onOpenSettings}
-        activeOpacity={0.7}
-      >
-        <Ionicons name="settings-sharp" size={20} color={COLORS.textSecondary} />
-      </TouchableOpacity>
+        {/* Date Selector Pill */}
+        <View style={styles.dateSelector}>
+          <TouchableOpacity
+            onPress={() => onChangeDate(-1)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="chevron-back" size={16} color={COLORS.textSecondary} />
+          </TouchableOpacity>
+
+          <Text style={styles.dateLabel}>{formattedDate}</Text>
+
+          <TouchableOpacity
+            onPress={() => onChangeDate(1)}
+            disabled={isToday}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons
+              name="chevron-forward"
+              size={16}
+              color={isToday ? COLORS.cardBorder : COLORS.textSecondary}
+            />
+          </TouchableOpacity>
+        </View>
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 10,
   },
   leftCol: {
-    gap: 3,
+    flex: 1,
   },
   brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
+    flexWrap: 'wrap',
   },
-  appName: {
-    fontSize: 26,
+  greeting: {
+    fontSize: 22,
     fontWeight: '900',
     color: COLORS.text,
     letterSpacing: -0.5,
@@ -86,21 +126,23 @@ const styles = StyleSheet.create({
   aiPillText: {
     fontSize: 10,
     fontWeight: '700',
-    textTransform: 'uppercase',
   },
-  dateText: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    fontWeight: '500',
-  },
-  settingsBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.card,
-    justifyContent: 'center',
+  dateSelector: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+    backgroundColor: COLORS.card,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: COLORS.cardBorder,
+  },
+  dateLabel: {
+    color: COLORS.text,
+    fontSize: 12,
+    fontWeight: '700',
+    minWidth: 50,
+    textAlign: 'center',
   },
 });
